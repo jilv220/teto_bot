@@ -32,7 +32,8 @@ defmodule TetoBot.TextGenerator do
     <|assistant|>
     """
 
-    output = Nx.Serving.batched_run(Teto.Serving, prompt)
-    IO.inspect(output)
+    output = Nx.Serving.batched_run(TetoBot.Serving, prompt)
+    %{results: [text: text]} = output
+    text
   end
 end

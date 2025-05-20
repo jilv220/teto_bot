@@ -13,7 +13,7 @@ defmodule TetoBot.Application do
 
     children = [
       {Nostrum.Bot, bot_options},
-      {Nx.Serving, serving: TextGenerator.serving(), name: TetoBot.Serving, batch_timeOut: 1000}
+      {Nx.Serving, serving: TextGenerator.serving(), name: TetoBot.Serving}
     ]
 
     Supervisor.start_link(children, strategy: :one_for_one)

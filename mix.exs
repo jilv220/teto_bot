@@ -26,9 +26,9 @@ defmodule TetoBot.MixProject do
       {:nostrum, github: "Kraigie/nostrum"},
       {:axon, "~> 0.7.0"},
       {:bumblebee, "~> 0.6"},
-      {:nx, "~> 0.6"},
+      {:nx, "~> 0.9"},
       {:kino, "~> 0.14.0"},
-      {:exla, "~> 0.9.0"}
+      {:exla, "~> 0.9"}
     ]
   end
 end
