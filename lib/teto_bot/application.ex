@@ -1,8 +1,6 @@
 defmodule TetoBot.Application do
   use Application
 
-  alias TetoBot.TextGenerator
-
   @impl true
   def start(_type, _args) do
     bot_options = %{
@@ -12,8 +10,8 @@ defmodule TetoBot.Application do
     }
 
     children = [
-      {Nostrum.Bot, bot_options},
-      {Nx.Serving, serving: TextGenerator.serving(), name: TetoBot.Serving}
+      TetoBot.Repo,
+      {Nostrum.Bot, bot_options}
     ]
 
     Supervisor.start_link(children, strategy: :one_for_one)

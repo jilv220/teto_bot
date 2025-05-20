@@ -22,5 +22,9 @@ teto_bot-*.tar
 # Temporary files, for example, from tests.
 /tmp/
 
+# Database files
+*.db
+*.db-*
+
 .env
 .elixir_ls
