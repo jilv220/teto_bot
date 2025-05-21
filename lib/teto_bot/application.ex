@@ -1,8 +1,13 @@
 defmodule TetoBot.Application do
+  require Logger
+
   use Application
 
   @impl true
   def start(_type, _args) do
+    :ets.new(:rate_limit, [:set, :public, :named_table])
+    Logger.info("Initialized :rate_limit ETS table")
+
     bot_options = %{
       consumer: TetoBot.Consumer,
       intents: [:direct_messages, :guild_messages, :message_content],
@@ -10,7 +15,7 @@ defmodule TetoBot.Application do
     }
 
     children = [
-      TetoBot.Repo,
+      {TetoBot.MessageContext, []},
       {Nostrum.Bot, bot_options}
     ]
 

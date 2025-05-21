@@ -24,9 +24,7 @@ defmodule TetoBot.MixProject do
     [
       # api has breaking changes... wait for 0.11
       {:nostrum, github: "Kraigie/nostrum"},
-      {:openai_ex, "~> 0.9.9"},
-      {:ecto_sqlite3, "~> 0.9.1"},
-      {:ecto_sql, "~> 3.0"}
+      {:openai_ex, "~> 0.9.9"}
     ]
   end
 end

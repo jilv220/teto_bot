@@ -1,59 +1,61 @@
 defmodule TetoBot.LLM do
+  @moduledoc """
+  Interfaces with an LLM API to generate responses as Kasane Teto.
+
+  Configuration keys under `:teto_bot`:
+    - `:llm_model_name`: LLM model name (default: "grok-3-mini")
+    - `:llm_sys_prompt`: System prompt defining Teto's personality (default: see below)
+    - `:llm_max_words`: Maximum words in response (default: 50)
+  """
+
   require Logger
   alias OpenaiEx.Chat
   alias OpenaiEx.ChatMessage
 
-  @model_name "grok-3-mini"
-
-  def get_client() do
+  @doc """
+  Creates an OpenaiEx client using environment variables for API key and base URL.
+  """
+  # @spec get_client() :: OpenaiEx.t()
+  def get_client do
     apikey = System.fetch_env!("LLM_API_KEY")
     base_url = System.fetch_env!("LLM_BASE_URL")
 
-    openai =
-      OpenaiEx.new(apikey)
-      |> OpenaiEx.with_base_url(base_url)
-
-    openai
+    OpenaiEx.new(apikey)
+    |> OpenaiEx.with_base_url(base_url)
   end
 
-  def generate_response(openai, user_input) do
-    sys_prompt = """
-    Be concise, keep response under 50 words.
+  @doc """
+  Generates a response from the LLM using the conversation context.
 
-    You are Kasane Teto, a virtual idol and vocal synthesizer character from the UTAU software,
-    later expanded to Synthesizer V and VOICEPEAK.
+  ## Parameters
+    - openai: OpenaiEx client
+    - context: List of message strings in chronological order
+  """
+  def generate_response(openai, context) do
+    sys_prompt = Application.get_env(:teto_bot, :llm_sys_prompt, "")
+    model_name = Application.get_env(:teto_bot, :llm_model_name, "grok-3-mini")
+    max_words = Application.get_env(:teto_bot, :llm_max_words, 50)
 
-    Character Table
-    Origin: April Fools' prank in 2008, 2channel, later UTAU and Synthesizer V character
-    Appearance: Reddish drill twintails, red-black military uniform, side chain ("tail")
-    Height: 159.5cm
-    Personality: Tsundere, mischievous, playful, caring through teasing
-    Likes: Baguettes, margarine, music, Norway
-    Dislikes: Rats, Detroit Metal City (DMC)
-    Good at: Extending rental DVDs
-    Bad at: Singing
-    Catchphrase: I can hold microphone of any kind / Kimi wa jitsu ni baka dana
-    Age/Gender: Officially 31, literally a hag by internet's standard, perceived as teen, listed as Chimera (troll gender)
-    Group: Triple Baka, with Miku and Neru
-
-    Don't overuse Catchphrase.
-    """
+    messages = [
+      ChatMessage.system(sys_prompt <> "\nKeep responses under #{max_words} words.")
+      | Enum.map(context, &ChatMessage.user/1)
+    ]
 
     chat_req =
       Chat.Completions.new(
-        model: @model_name,
-        messages: [
-          ChatMessage.system(sys_prompt),
-          ChatMessage.user(user_input)
-        ],
+        model: model_name,
+        messages: messages,
         reasoning_effort: "low"
       )
 
-    {:ok, chat_response} = openai |> Chat.Completions.create(chat_req)
-    %{"choices" => [%{"message" => message} | _]} = chat_response
-    %{"content" => content} = message
+    case Chat.Completions.create(openai, chat_req) do
+      {:ok, %{"choices" => [%{"message" => %{"content" => content}} | _]}} ->
+        Logger.info("Response from LLM: #{content}")
+        content
 
-    Logger.info("Response from the bot: #{content}")
-    content
+      {:error, error} ->
+        Logger.error("LLM API error: #{inspect(error)}")
+        raise RuntimeError, message: "Failed to generate response from LLM"
+    end
   end
 end
