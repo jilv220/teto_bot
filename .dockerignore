@@ -1,0 +1,70 @@
+# flyctl launch added from .elixir_ls/.gitignore
+.elixir_ls/**/*
+
+# flyctl launch added from .gitignore
+# The directory Mix will write compiled artifacts to.
+_build
+
+# If you run "mix test --cover", coverage assets end up here.
+cover
+
+# The directory Mix downloads your dependencies sources to.
+deps
+
+# Where third-party dependencies like ExDoc output generated docs.
+doc
+
+# If the VM crashes, it generates a dump, let's ignore it too.
+**/erl_crash.dump
+
+# Also ignore archive artifacts (built via "mix archive.build").
+**/*.ez
+
+# Ignore package tarball (built via "mix hex.build").
+**/teto_bot-*.tar
+
+# Temporary files, for example, from tests.
+tmp
+
+# Database files
+**/*.db
+**/*.db-*
+
+**/.env
+**/.elixir_ls
+
+# flyctl launch added from deps/nostrum/.gitignore
+# The directory Mix will write compiled artifacts to.
+deps/nostrum/_build
+
+# Outputs from benchmark reports.
+deps/nostrum/benchmarks/output
+
+# If you run "mix test --cover", coverage assets end up here.
+deps/nostrum/cover
+
+# Provide your own token during test
+deps/nostrum/config/secret.exs
+
+# The directory Mix downloads your dependencies sources to.
+deps/nostrum/deps
+
+# If the VM crashes, it generates a dump, let's ignore it too.
+deps/nostrum/**/erl_crash.dump
+
+# Docs
+deps/nostrum/**/doc
+!deps/nostrum/**/docs
+!deps/nostrum/**/docs/static/*
+
+# xref
+deps/nostrum/**/*.dot
+
+# Also ignore archive artifacts (built via "mix archive.build").
+deps/nostrum/**/*.ez
+
+# Ignore VSCode artifacts
+deps/nostrum/**/.elixir_ls
+deps/nostrum/**/.mix_tasks
+deps/nostrum/**/.vscode
+fly.toml
