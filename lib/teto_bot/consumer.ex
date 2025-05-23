@@ -3,6 +3,7 @@ defmodule TetoBot.Consumer do
 
   require Logger
 
+  alias Nostrum.Struct.Message.Attachment
   alias Nostrum.Api.Message
   alias Nostrum.Api
   alias Nostrum.Bot
@@ -79,21 +80,40 @@ defmodule TetoBot.Consumer do
   defp generate_and_send_response(%Message{
          author: %User{id: user_id, username: username},
          content: content,
+         attachments: attachments,
          channel_id: channel_id,
          id: message_id
        }) do
     Logger.info("New msg from #{username}: #{inspect(content)}")
 
-    MessageContext.store_message(user_id, content)
-    context = MessageContext.get_context(user_id)
-
     openai = LLM.get_client()
+
+    if length(attachments) > 0 do
+      # Only pass first attachment to save tokens...
+      [%Attachment{url: url} | _] = attachments
+      Logger.info("Image url: #{url}")
+      # Make sure attachment is actually image and convert to png/jpg, or ignore
+
+      # Handle error
+      {:ok, image_summary} = openai |> LLM.summarize_image(url)
+      Logger.debug("#{inspect(image_summary)}")
+      MessageContext.store_message(user_id, image_summary, :user)
+    end
+
+    MessageContext.store_message(user_id, content, :user)
+    context = MessageContext.get_context(user_id)
     response = openai |> LLM.generate_response(context)
 
-    Api.Message.create(channel_id,
-      content: response,
-      message_reference: %{message_id: message_id}
-    )
+    {:ok, _} =
+      Api.Message.create(channel_id,
+        content: response,
+        message_reference: %{message_id: message_id}
+      )
+
+    # Store the bot's response as assistant
+    MessageContext.store_message(user_id, response, :assistant)
+
+    :ok
   end
 
   defp send_rate_limit_warning(channel_id) do

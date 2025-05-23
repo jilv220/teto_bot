@@ -2,7 +2,7 @@ defmodule TetoBot.MessageContext do
   @moduledoc """
   A GenServer managing a short-lived message context using an ETS table.
 
-  Stores messages for each user within a configurable time window.
+  Stores messages for each user within a configurable time window with role (:user or :assistant).
   Configuration keys under `:teto_bot`:
     - `:context_window`: Time window in seconds for storing messages (default: 300)
   """
@@ -19,26 +19,26 @@ defmodule TetoBot.MessageContext do
   end
 
   @doc """
-  Stores a new message for a user with the current timestamp.
+  Stores a new message for a user with the current timestamp and role.
   """
-  @spec store_message(integer(), String.t()) :: :ok
-  def store_message(user_id, content) do
-    GenServer.call(__MODULE__, {:store, user_id, content})
+  @spec store_message(integer(), String.t(), :user | :assistant) :: :ok
+  def store_message(user_id, content, role) do
+    GenServer.call(__MODULE__, {:store, user_id, content, role})
   end
 
   @doc """
   Retrieves the conversation context for a user within the time window.
-  Returns a list of message contents in chronological order.
+  Returns a list of {role, content} tuples in chronological order.
   """
-  @spec get_context(integer()) :: [String.t()]
+  @spec get_context(integer()) :: [{:user | :assistant, String.t()}]
   def get_context(user_id) do
     window = Application.get_env(:teto_bot, :context_window, 300)
     now = System.monotonic_time(:second)
 
-    :ets.match_object(:message_context, {user_id, :_, :_})
-    |> Enum.filter(fn {_, timestamp, _} -> now - timestamp <= window end)
-    |> Enum.sort_by(fn {_, timestamp, _} -> timestamp end)
-    |> Enum.map(fn {_, _, content} -> content end)
+    :ets.match_object(:message_context, {user_id, :_, :_, :_})
+    |> Enum.filter(fn {_, timestamp, _, _} -> now - timestamp <= window end)
+    |> Enum.sort_by(fn {_, timestamp, _, _} -> timestamp end)
+    |> Enum.map(fn {_, _, role, content} -> {role, content} end)
   end
 
   @impl true
@@ -54,10 +54,10 @@ defmodule TetoBot.MessageContext do
   end
 
   @impl true
-  def handle_call({:store, user_id, content}, _from, state) do
+  def handle_call({:store, user_id, content, role}, _from, state) do
     now = System.monotonic_time(:second)
-    :ets.insert(:message_context, {user_id, System.monotonic_time(:second), content})
-    Logger.debug("Storing message for user #{user_id}: #{content} at #{now}")
+    :ets.insert(:message_context, {user_id, now, role, content})
+    Logger.debug("Storing #{role} message for user #{user_id}: #{content} at #{now}")
     {:reply, :ok, state}
   end
 
@@ -67,7 +67,7 @@ defmodule TetoBot.MessageContext do
     now = System.monotonic_time(:second)
 
     :ets.select_delete(:message_context, [
-      {{:_, :"$1", :_}, [{:>, {:-, now, :"$1"}, window}], [true]}
+      {{:_, :"$1", :_, :_}, [{:>, {:-, now, :"$1"}, window}], [true]}
     ])
 
     schedule_cleanup()

@@ -9,6 +9,7 @@ defmodule TetoBot.LLM do
   """
 
   require Logger
+  alias OpenaiEx.MsgContent
   alias OpenaiEx.Chat
   alias OpenaiEx.ChatMessage
 
@@ -18,10 +19,11 @@ defmodule TetoBot.LLM do
   # @spec get_client() :: OpenaiEx.t()
   def get_client do
     apikey = System.fetch_env!("LLM_API_KEY")
-    base_url = System.fetch_env!("LLM_BASE_URL")
+    # base_url = System.fetch_env!("LLM_BASE_URL")
 
     OpenaiEx.new(apikey)
-    |> OpenaiEx.with_base_url(base_url)
+    # |> OpenaiEx.with_base_url(base_url)
+    |> OpenaiEx.with_receive_timeout(30_000)
   end
 
   @doc """
@@ -36,26 +38,81 @@ defmodule TetoBot.LLM do
     model_name = Application.get_env(:teto_bot, :llm_model_name, "grok-3-mini")
     max_words = Application.get_env(:teto_bot, :llm_max_words, 50)
 
-    messages = [
-      ChatMessage.system(sys_prompt <> "\nKeep responses under #{max_words} words.")
-      | Enum.map(context, &ChatMessage.user/1)
-    ]
+    messages =
+      [
+        ChatMessage.system(sys_prompt <> "\nKeep responses under #{max_words} words.")
+        | Enum.map(context, fn
+            {:user, content} -> ChatMessage.user(content)
+            {:assistant, content} -> ChatMessage.assistant(content)
+          end)
+      ]
 
     chat_req =
       Chat.Completions.new(
         model: model_name,
-        messages: messages,
-        reasoning_effort: "low"
+        messages: messages
       )
 
     case Chat.Completions.create(openai, chat_req) do
-      {:ok, %{"choices" => [%{"message" => %{"content" => content}} | _]}} ->
+      {:ok,
+       %{
+         "choices" =>
+           [%{"message" => %{"content" => content}} | _] =
+               _resp
+       }} ->
         Logger.info("Response from LLM: #{content}")
         content
 
       {:error, error} ->
         Logger.error("LLM API error: #{inspect(error)}")
         raise RuntimeError, message: "Failed to generate response from LLM"
+    end
+  end
+
+  @doc """
+  Generates a text summary of an image.
+
+  ## Parameters
+    - openai: OpenaiEx client
+    - image_url: URL of the image to summarize
+
+  ## Returns
+    - {:ok, summary} if successful
+    - {:error, reason} if the summarization fails
+  """
+  def summarize_image(openai, image_url) do
+    vision_model = Application.get_env(:teto_bot, :llm_vision_model_name, "grok-2-vision-latest")
+
+    messages = [
+      ChatMessage.user([
+        %{
+          type: "image_url",
+          # Library needs to update, i ll make a PR if no one made one already..
+          image_url: %{
+            url: image_url,
+            detail: "high"
+          }
+        },
+        MsgContent.text(
+          "Summarize this image, try to identify whether the character is Kasane Teto,
+           and reply in the format of 'User uploaded a image...' "
+        )
+      ])
+    ]
+
+    chat_req =
+      Chat.Completions.new(
+        model: vision_model,
+        messages: messages,
+        temperature: 0.01
+      )
+
+    case Chat.Completions.create(openai, chat_req) do
+      {:ok, %{"choices" => [%{"message" => %{"content" => summary}} | _]}} ->
+        {:ok, summary}
+
+      {:error, error} ->
+        {:error, error}
     end
   end
 end
