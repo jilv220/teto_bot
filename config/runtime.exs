@@ -1,3 +1,5 @@
+import Config
+
 if config_env() == :prod do
   database_path =
     System.get_env("DATABASE_URL") ||
