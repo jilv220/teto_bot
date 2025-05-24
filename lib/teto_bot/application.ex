@@ -15,6 +15,7 @@ defmodule TetoBot.Application do
     }
 
     children = [
+      TetoBot.Repo,
       {TetoBot.MessageContext, []},
       {Nostrum.Bot, bot_options}
     ]

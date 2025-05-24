@@ -4,6 +4,9 @@ config :nostrum,
   ffmpeg: nil
 
 config :teto_bot,
+  ecto_repos: [TetoBot.Repo],
+  pool_size: 10,
+  generators: [timestamp_type: :utc_datetime],
   # Time window in seconds for rate limiting
   rate_limit_window: 60,
   # Maximum requests allowed in the window
