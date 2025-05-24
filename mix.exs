@@ -7,6 +7,7 @@ defmodule TetoBot.MixProject do
       version: "0.1.0",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
+      aliases: aliases(),
       deps: deps()
     ]
   end
@@ -27,6 +28,12 @@ defmodule TetoBot.MixProject do
       {:openai_ex, "~> 0.9.9"},
       {:ecto_sql, "~> 3.0"},
       {:postgrex, ">= 0.0.0"}
+    ]
+  end
+
+  defp aliases do
+    [
+      "ecto.setup": ["ecto.create", "ecto.migrate"]
     ]
   end
 end
