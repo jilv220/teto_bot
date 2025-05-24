@@ -33,7 +33,9 @@ defmodule TetoBot.MixProject do
 
   defp aliases do
     [
-      "ecto.setup": ["ecto.create", "ecto.migrate"]
+      # If defined, deploys assets and ecto using mix assets.deploy and mix ecto.deploy
+      # https://railpack.com/languages/elixir/#_top
+      "ecto.deploy": ["ecto.create", "ecto.migrate"]
     ]
   end
 end
