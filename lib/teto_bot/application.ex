@@ -5,6 +5,8 @@ defmodule TetoBot.Application do
 
   @impl true
   def start(_type, _args) do
+    TetoBot.Release.migrate()
+
     :ets.new(:rate_limit, [:set, :public, :named_table])
     Logger.info("Initialized :rate_limit ETS table")
 
