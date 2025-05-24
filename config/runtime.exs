@@ -12,6 +12,5 @@ if config_env() == :prod do
   config :teto_bot, TetoBot.Repo,
     database: database_url,
     pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
-    socket_options: maybe_ipv6,
-    ssl: true
+    socket_options: maybe_ipv6
 end
