@@ -1,7 +1,6 @@
 defmodule TetoBot.Consumer do
   @behaviour Nostrum.Consumer
 
-  import Bitwise
   require Logger
 
   alias Nostrum.Struct.Message.Attachment

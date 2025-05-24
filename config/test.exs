@@ -2,7 +2,7 @@ import Config
 
 config :logger, :console, metadata: [:shard, :guild, :channel, :bot]
 
-config :myapp, MyApp.Repo,
+config :teto_bot, TetoBot.Repo,
   url:
     System.get_env(
       "DATABASE_URL",
