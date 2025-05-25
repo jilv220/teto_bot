@@ -3,6 +3,7 @@ defmodule TetoBot.Consumer do
 
   require Logger
 
+  alias Nostrum.Cache.MessageCache
   alias Nostrum.Struct.Message.Attachment
   alias Nostrum.Api.Message
   alias Nostrum.Api
@@ -185,43 +186,93 @@ defmodule TetoBot.Consumer do
   def handle_event(_), do: :ok
 
   ## Helpers
-  defp handle_msg(%Message{} = msg) do
-    if msg.author.id != Bot.get_bot_name() do
-      # TODO: skip relies
+  defp handle_msg(
+         %Message{
+           message_reference: msg_ref,
+           author: %User{id: author_id}
+         } = msg
+       ) do
+    bot_id = Bot.get_bot_name()
 
-      if RateLimiter.allow?(msg.author.id) do
-        generate_and_send_response(msg)
-      else
-        send_rate_limit_warning(msg.channel_id)
+    # Skip if the message is from the bot itself
+    if author_id == bot_id do
+      :ok
+    else
+      # Check if the message is a reply to the bot
+      case msg_ref do
+        %{message_id: replied_msg_id} ->
+          case MessageCache.get(replied_msg_id) do
+            {:ok, replied_to_msg} ->
+              # Only proceed if the replied-to message is from the bot
+              if replied_to_msg.author.id == bot_id do
+                process_message(msg)
+              else
+                Logger.debug("Ignoring reply to non-bot message: #{replied_msg_id}")
+                :ok
+              end
+
+            {:error, reason} ->
+              Logger.error(
+                "Failed to fetch replied message #{replied_msg_id}: #{inspect(reason)}"
+              )
+
+              :ok
+          end
+
+        nil ->
+          # Process non-reply messages
+          process_message(msg)
       end
     end
   end
 
-  defp generate_and_send_response(%Message{
-         author: %User{id: user_id, username: username},
-         content: content,
-         attachments: attachments,
-         channel_id: channel_id,
-         id: message_id
-       }) do
+  defp process_message(%Message{author: %User{id: user_id}, channel_id: channel_id} = msg) do
+    if RateLimiter.allow?(user_id) do
+      generate_and_send_response(msg)
+    else
+      send_rate_limit_warning(channel_id)
+    end
+  end
+
+  defp generate_and_send_response(
+         %Message{
+           author: %User{username: username},
+           content: content,
+           attachments: attachments,
+           channel_id: channel_id,
+           id: message_id
+         } = msg
+       ) do
     Logger.info("New msg from #{username}: #{inspect(content)}")
 
     openai = LLM.get_client()
 
+    # Handle image attachments
+    attachments = attachments || []
+
     if length(attachments) > 0 do
-      # Only pass first attachment to save tokens...
+      # Only process first attachment to save tokens
       [%Attachment{url: url} | _] = attachments
       Logger.info("Image url: #{url}")
-      # Make sure attachment is actually image and convert to png/jpg, or ignore
 
-      # Handle error
-      {:ok, image_summary} = openai |> LLM.summarize_image(url)
-      Logger.debug("#{inspect(image_summary)}")
-      MessageContext.store_message(user_id, image_summary, :user)
+      case LLM.summarize_image(openai, url) do
+        {:ok, image_summary} ->
+          Logger.debug("Image summary: #{inspect(image_summary)}")
+          # Override content field with image summary, then update the cache
+          update_payload = %{
+            id: msg.id,
+            content: image_summary
+          }
+
+          MessageCache.Mnesia.update(update_payload)
+
+        {:error, reason} ->
+          Logger.error("Failed to summarize image: #{inspect(reason)}")
+          Api.Message.create(channel_id, content: "Failed to process the image. Try again later.")
+      end
     end
 
-    MessageContext.store_message(user_id, content, :user)
-    context = MessageContext.get_context(user_id)
+    context = MessageContext.get_context(channel_id)
     response = openai |> LLM.generate_response(context)
 
     {:ok, _} =
@@ -229,9 +280,6 @@ defmodule TetoBot.Consumer do
         content: response,
         message_reference: %{message_id: message_id}
       )
-
-    # Store the bot's response as assistant
-    MessageContext.store_message(user_id, response, :assistant)
 
     :ok
   end

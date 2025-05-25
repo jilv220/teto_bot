@@ -46,8 +46,11 @@ defmodule TetoBot.LLM do
       [
         ChatMessage.system(sys_prompt <> "\nKeep responses under #{max_words} words.")
         | Enum.map(context, fn
-            {:user, content} -> ChatMessage.user(content)
-            {:assistant, content} -> ChatMessage.assistant(content)
+            {:user, username, content} ->
+              ChatMessage.user("from " <> username <> ": " <> content)
+
+            {:assistant, _username, content} ->
+              ChatMessage.assistant(content)
           end)
       ]
 

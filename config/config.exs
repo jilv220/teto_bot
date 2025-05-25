@@ -1,7 +1,10 @@
 import Config
 
 config :nostrum,
-  ffmpeg: nil
+  ffmpeg: nil,
+  caches: [
+    messages: Nostrum.Cache.MessageCache.Mnesia
+  ]
 
 config :teto_bot,
   # DB
