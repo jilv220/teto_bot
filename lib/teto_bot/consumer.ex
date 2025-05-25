@@ -176,7 +176,7 @@ defmodule TetoBot.Consumer do
           :ok
       end
     else
-      Logger.info("Ignoring message from non-whitelisted channel: #{msg.channel_id}")
+      Logger.debug("Ignoring message from non-whitelisted channel: #{msg.channel_id}")
       :ok
     end
   end
@@ -185,8 +185,10 @@ defmodule TetoBot.Consumer do
   def handle_event(_), do: :ok
 
   ## Helpers
-  defp handle_msg(msg) do
+  defp handle_msg(%Message{} = msg) do
     if msg.author.id != Bot.get_bot_name() do
+      # TODO: skip relies
+
       if RateLimiter.allow?(msg.author.id) do
         generate_and_send_response(msg)
       else

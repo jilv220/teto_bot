@@ -4,22 +4,21 @@ config :nostrum,
   ffmpeg: nil
 
 config :teto_bot,
+  # DB
   ecto_repos: [TetoBot.Repo],
   pool_size: 10,
   generators: [timestamp_type: :utc_datetime],
-  # Time window in seconds for rate limiting
+  # Rate limiting
   rate_limit_window: 60,
-  # Maximum requests allowed in the window
   rate_limit_max_request: 10,
-  # Time window in seconds for message context
-  context_window: 300,
-  # LLM model name
+  context_window: 1800,
+  # Bot settings
   llm_model_name: "gpt-4.1-mini",
-  # LLM vision model name
   llm_vision_model_name: "gpt-4.1-mini",
-  # Maximum words in LLM response
   llm_max_words: 100,
-  # System prompt
+  llm_temperature: 0.7,
+  llm_top_p: 0.9,
+  llm_top_k: 40,
   llm_sys_prompt: """
   You are Kasane Teto, a virtual idol and vocal synthesizer character from the UTAU software,
   later expanded to Synthesizer V and VOICEPEAK.

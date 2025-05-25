@@ -38,6 +38,10 @@ defmodule TetoBot.LLM do
     model_name = Application.get_env(:teto_bot, :llm_model_name, "grok-3-mini")
     max_words = Application.get_env(:teto_bot, :llm_max_words, 50)
 
+    temperature = Application.get_env(:teto_bot, :llm_temperature, 0.7)
+    top_p = Application.get_env(:teto_bot, :llm_top_p, 0.9)
+    top_k = Application.get_env(:teto_bot, :llm_top_k, 40)
+
     messages =
       [
         ChatMessage.system(sys_prompt <> "\nKeep responses under #{max_words} words.")
@@ -50,7 +54,10 @@ defmodule TetoBot.LLM do
     chat_req =
       Chat.Completions.new(
         model: model_name,
-        messages: messages
+        messages: messages,
+        temperature: temperature,
+        top_p: top_p,
+        top_k: top_k
       )
 
     case Chat.Completions.create(openai, chat_req) do
