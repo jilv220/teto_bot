@@ -28,3 +28,5 @@ teto_bot-*.tar
 
 .env
 .elixir_ls
+
+**/teto.json*
