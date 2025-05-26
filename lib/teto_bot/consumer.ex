@@ -4,162 +4,28 @@ defmodule TetoBot.Consumer do
   require Logger
 
   alias Nostrum.Cache.MessageCache
-  alias Nostrum.Struct.Message.Attachment
   alias Nostrum.Api.Message
   alias Nostrum.Api
   alias Nostrum.Bot
 
   alias Nostrum.Struct.Message
+  alias Nostrum.Struct.Message.Attachment
   alias Nostrum.Struct.User
-  alias Nostrum.Struct.Interaction
 
   alias TetoBot.Channels
+  alias TetoBot.Commands
+  alias TetoBot.Interactions
   alias TetoBot.LLM
   alias TetoBot.RateLimiter
   alias TetoBot.MessageContext
 
-  # CHANNEL_MESSAGE_WITH_SOURCE
-  @interaction_response_type 4
-
   def handle_event({:READY, %{guilds: guilds} = _msg, _}) do
-    Logger.debug("#{inspect(guilds)}")
-
-    commands = [
-      %{
-        name: "ping",
-        description: "check alive"
-      },
-      %{
-        name: "whitelist",
-        description: "Whitelist a channel for the bot to operate in.",
-        options: [
-          %{
-            # Channel type
-            type: 7,
-            name: "channel",
-            description: "The channel to whitelist",
-            required: true
-          }
-        ]
-      },
-      %{
-        name: "blacklist",
-        description: "Remove a channel from whitelist",
-        options: [
-          %{
-            # Channel type
-            type: 7,
-            name: "channel",
-            description: "The channel to blacklist",
-            required: true
-          }
-        ]
-      }
-    ]
-
-    # TODO: Proper queuing and dispatching
-    guilds
-    |> Enum.map(fn guild ->
-      commands
-      |> Enum.map(fn command ->
-        Api.ApplicationCommand.create_guild_command(guild.id, command)
-      end)
-    end)
+    Logger.debug("Bot is ready, guilds: #{inspect(guilds)}")
+    Commands.register_commands(guilds)
   end
 
-  def handle_event(
-        {:INTERACTION_CREATE, %Interaction{data: %{name: "ping"}} = interaction, _ws_state}
-      ) do
-    response = %{
-      type: @interaction_response_type,
-      data: %{
-        content: "pong"
-      }
-    }
-
-    Api.Interaction.create_response(interaction, response)
-  end
-
-  def handle_event(
-        {:INTERACTION_CREATE, %Interaction{data: %{name: "whitelist"}} = interaction, _ws_state}
-      ) do
-    channel_id = get_channel_id_from_options(interaction.data.options)
-
-    case Channels.whitelist_channel(channel_id) do
-      {:ok, _channel} ->
-        response = %{
-          # CHANNEL_MESSAGE_WITH_SOURCE
-          type: @interaction_response_type,
-          data: %{
-            content: "Channel <##{channel_id}> whitelisted successfully!"
-          }
-        }
-
-        Api.Interaction.create_response(interaction, response)
-
-      {:error, changeset} ->
-        Logger.error("Failed to whitelist channel #{channel_id}: #{inspect(changeset.errors)}")
-        {error_msg, _} = changeset.errors |> Keyword.get(:channel_id)
-
-        response_content =
-          if is_binary(error_msg) && error_msg |> String.contains?("has already been taken") do
-            "Channel <##{channel_id}> is already whitelisted."
-          else
-            "Failed to whitelist channel <##{channel_id}>. Please check the logs."
-          end
-
-        response = %{
-          # CHANNEL_MESSAGE_WITH_SOURCE
-          type: @interaction_response_type,
-          data: %{
-            content: response_content
-          }
-        }
-
-        Api.Interaction.create_response(interaction, response)
-    end
-  end
-
-  def handle_event(
-        {:INTERACTION_CREATE, %Interaction{data: %{name: "blacklist"}} = interaction, _ws_state}
-      ) do
-    channel_id = get_channel_id_from_options(interaction.data.options)
-
-    case Channels.blacklist_channel(channel_id) do
-      {:ok, _channel} ->
-        response = %{
-          type: @interaction_response_type,
-          data: %{
-            content: "Channel <##{channel_id}> has been removed from the whitelist."
-          }
-        }
-
-        Api.Interaction.create_response(interaction, response)
-
-      {:error, :not_found} ->
-        response = %{
-          type: @interaction_response_type,
-          data: %{
-            content: "Channel <##{channel_id}> was not found in the whitelist."
-          }
-        }
-
-        Api.Interaction.create_response(interaction, response)
-
-      # Catch other potential errors from Repo.delete
-      {:error, reason} ->
-        Logger.error("Failed to blacklist channel <##{channel_id}>: #{inspect(reason)}")
-
-        response = %{
-          type: @interaction_response_type,
-          data: %{
-            content:
-              "An error occurred while trying to remove channel <##{channel_id}> from the whitelist."
-          }
-        }
-
-        Api.Interaction.create_response(interaction, response)
-    end
+  def handle_event({:INTERACTION_CREATE, interaction, ws_state}) do
+    Interactions.handle_interaction(interaction, ws_state)
   end
 
   def handle_event({:MESSAGE_CREATE, msg, _ws_state}) do
@@ -261,7 +127,7 @@ defmodule TetoBot.Consumer do
           # Override content field with image summary, then update the cache
           update_payload = %{
             id: msg.id,
-            content: image_summary
+            content: content <> " Image attachment: " <> image_summary
           }
 
           MessageCache.Mnesia.update(update_payload)
@@ -288,9 +154,5 @@ defmodule TetoBot.Consumer do
     Api.Message.create(channel_id,
       content: "You're sending messages too quickly! Please wait a moment."
     )
-  end
-
-  defp get_channel_id_from_options(options) do
-    Enum.find(options, fn opt -> opt.name == "channel" end).value
   end
 end
