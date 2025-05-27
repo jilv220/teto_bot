@@ -21,7 +21,7 @@ defmodule TetoBot.Consumer do
 
   def handle_event({:READY, %{guilds: guilds} = _msg, _}) do
     Logger.debug("Bot is ready, guilds: #{inspect(guilds)}")
-    Commands.register_commands()
+    Commands.register_commands(guilds)
   end
 
   def handle_event({:INTERACTION_CREATE, interaction, ws_state}) do

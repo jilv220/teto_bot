@@ -7,6 +7,9 @@ config :nostrum,
   ]
 
 config :teto_bot,
+  # Env
+  env: config_env(),
+  dev_guild_id: 1_374_179_000_192_339_979,
   # DB
   ecto_repos: [TetoBot.Repo],
   pool_size: 10,
