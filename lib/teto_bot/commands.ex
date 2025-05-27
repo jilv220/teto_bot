@@ -58,19 +58,15 @@ defmodule TetoBot.Commands do
   ## Returns
   - `:ok` on success, logs errors if any command registration fails.
   """
-  def register_commands(guilds) do
-    Enum.each(guilds, fn guild ->
-      Enum.each(commands(), fn command ->
-        case Api.ApplicationCommand.create_guild_command(guild.id, command) do
-          {:ok, _} ->
-            Logger.debug("Registered command #{command.name} for guild #{guild.id}")
+  def register_commands() do
+    Enum.each(commands(), fn command ->
+      case Api.ApplicationCommand.create_global_command(command) do
+        {:ok, _} ->
+          Logger.debug("Registered global command #{command.name}")
 
-          {:error, reason} ->
-            Logger.error(
-              "Failed to register command #{command.name} for guild #{guild.id}: #{inspect(reason)}"
-            )
-        end
-      end)
+        {:error, reason} ->
+          Logger.error("Failed to register global command #{command.name}: #{inspect(reason)}")
+      end
     end)
 
     :ok
@@ -85,23 +81,23 @@ defmodule TetoBot.Commands do
   ## Returns
   - `:ok` on success, logs errors if any command unregistration fails.
   """
-  def unregister_commands(guild_id) do
-    case Api.ApplicationCommand.guild_commands(guild_id) do
+  def unregister_commands() do
+    case Api.ApplicationCommand.global_commands() do
       {:ok, commands} ->
         Enum.each(commands, fn command ->
-          case Api.ApplicationCommand.delete_guild_command(guild_id, command.id) do
+          case Api.ApplicationCommand.delete_global_command(command.id) do
             :ok ->
-              Logger.debug("Unregistered command #{command.name} for guild #{guild_id}")
+              Logger.debug("Unregistered global command #{command.name}")
 
             {:error, reason} ->
               Logger.error(
-                "Failed to unregister command #{command.name} for guild #{guild_id}: #{inspect(reason)}"
+                "Failed to unregister global command #{command.name}: #{inspect(reason)}"
               )
           end
         end)
 
       {:error, reason} ->
-        Logger.error("Failed to fetch commands for guild #{guild_id}: #{inspect(reason)}")
+        Logger.error("Failed to fetch global commands: #{inspect(reason)}")
     end
 
     :ok
