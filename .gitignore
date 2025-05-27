@@ -29,4 +29,6 @@ teto_bot-*.tar
 .env
 .elixir_ls
 
-**/teto.json*
+# Data for your bot
+/priv/finetune/*
+/priv/system_prompt.md

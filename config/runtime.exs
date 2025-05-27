@@ -14,3 +14,14 @@ if config_env() == :prod do
     pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
     socket_options: maybe_ipv6
 end
+
+if config_env() == :prod do
+  redis_url =
+    System.get_env("REDIS_URL") ||
+      raise """
+      environment variable REDIS_URL is missing.
+      """
+
+  config :teto_bot,
+    redis_url: redis_url
+end

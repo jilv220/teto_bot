@@ -17,6 +17,7 @@ defmodule TetoBot.Application do
     }
 
     children = [
+      {Redix, {Application.get_env(:teto_bot, :redis_url), name: :redix}},
       TetoBot.Repo,
       {Nostrum.Bot, bot_options}
     ]

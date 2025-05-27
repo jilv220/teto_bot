@@ -9,9 +9,12 @@ defmodule TetoBot.LLM do
   """
 
   require Logger
+
   alias OpenaiEx.MsgContent
   alias OpenaiEx.Chat
   alias OpenaiEx.ChatMessage
+
+  alias TetoBot.LLM
 
   @doc """
   Creates an OpenaiEx client using environment variables for API key and base URL.
@@ -34,7 +37,8 @@ defmodule TetoBot.LLM do
     - context: List of message strings in chronological order
   """
   def generate_response(openai, context) do
-    sys_prompt = Application.get_env(:teto_bot, :llm_sys_prompt, "")
+    {:ok, sys_prompt} = LLM.Context.get_system_prompt()
+
     model_name = Application.get_env(:teto_bot, :llm_model_name, "grok-3-mini")
     max_words = Application.get_env(:teto_bot, :llm_max_words, 50)
 
