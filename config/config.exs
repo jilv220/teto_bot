@@ -16,14 +16,14 @@ config :teto_bot,
   generators: [timestamp_type: :utc_datetime],
   # Rate limiting
   rate_limit_window: 60,
-  rate_limit_max_request: 10,
+  rate_limit_max_requests: 10,
   context_window: 1800,
   # Bot settings
   llm_model_name: "gpt-4.1-mini",
   llm_vision_model_name: "gpt-4.1-mini",
   llm_max_words: 100,
   llm_temperature: 0.7,
-  llm_top_p: 0.9,
+  llm_top_p: 1,
   llm_top_k: 40
 
 # Import environment specific config. This must remain at the bottom

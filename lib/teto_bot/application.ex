@@ -7,9 +7,6 @@ defmodule TetoBot.Application do
   def start(_type, _args) do
     TetoBot.Release.migrate()
 
-    :ets.new(:rate_limit, [:set, :public, :named_table])
-    Logger.info("Initialized :rate_limit ETS table")
-
     bot_options = %{
       consumer: TetoBot.Consumer,
       intents: [:direct_messages, :guild_messages, :message_content],
