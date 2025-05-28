@@ -17,8 +17,6 @@ defmodule TetoBot.RateLimiter do
         count = parse_integer(count_str, 0)
         last_time = parse_integer(last_time_str, 0)
 
-        IO.inspect("#{count}:#{last_time}")
-
         if now - last_time > window do
           update_redis(redis_key, 1, now)
           true
