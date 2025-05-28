@@ -16,8 +16,13 @@ defmodule TetoBot.Application do
       wrapped_token: fn -> System.fetch_env!("BOT_TOKEN") end
     }
 
+    redis_options = {
+      Application.get_env(:teto_bot, :redis_url),
+      name: :redix, socket_opts: Application.get_env(:teto_bot, :redis_socket_options)
+    }
+
     children = [
-      {Redix, {Application.get_env(:teto_bot, :redis_url), name: :redix}},
+      {Redix, redis_options},
       TetoBot.Repo,
       {Nostrum.Bot, bot_options}
     ]

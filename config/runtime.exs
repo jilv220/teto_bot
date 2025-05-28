@@ -22,6 +22,9 @@ if config_env() == :prod do
       environment variable REDIS_URL is missing.
       """
 
+  maybe_ipv6 = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: []
+
   config :teto_bot,
-    redis_url: redis_url
+    redis_url: redis_url,
+    redis_socket_options: maybe_ipv6
 end
