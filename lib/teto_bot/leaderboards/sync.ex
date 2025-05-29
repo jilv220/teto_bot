@@ -20,7 +20,8 @@ defmodule TetoBot.Leaderboards.Sync do
   end
 
   defp schedule_sync do
-    five_mins = 5 * 60 * 1000
+    sec = 1000
+    five_mins = 5 * 60 * sec
     Process.send_after(self(), :sync, five_mins)
   end
 
