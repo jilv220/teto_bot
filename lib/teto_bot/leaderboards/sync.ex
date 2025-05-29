@@ -20,8 +20,8 @@ defmodule TetoBot.Leaderboards.Sync do
   end
 
   defp schedule_sync do
-    # 5 minutes
-    Process.send_after(self(), :sync, 5 * 60 * 1000)
+    five_mins = 5 * 60 * 1000
+    Process.send_after(self(), :sync, five_mins)
   end
 
   defp sync_to_postgres do
@@ -48,14 +48,13 @@ defmodule TetoBot.Leaderboards.Sync do
             attrs = %{
               guild_id: guild_id,
               user_id: user_id,
-              intimacy: intimacy,
-              last_updated: DateTime.utc_now()
+              intimacy: intimacy
             }
 
             %Leaderboard{}
             |> Leaderboard.changeset(attrs)
             |> TetoBot.Repo.insert(
-              on_conflict: [set: [intimacy: intimacy, last_updated: attrs.last_updated]],
+              on_conflict: [set: [intimacy: intimacy]],
               conflict_target: [:guild_id, :user_id]
             )
           end

@@ -9,7 +9,7 @@ defmodule TetoBot.Application do
 
     bot_options = %{
       consumer: TetoBot.Consumer,
-      intents: [:direct_messages, :guild_messages, :message_content],
+      intents: [:direct_messages, :guilds, :guild_messages, :message_content],
       wrapped_token: fn -> System.fetch_env!("BOT_TOKEN") end
     }
 
