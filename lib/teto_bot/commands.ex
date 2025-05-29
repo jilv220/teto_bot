@@ -21,7 +21,7 @@ defmodule TetoBot.Commands do
       },
       %{
         name: "teto",
-        description: "Check your intimacy with Teto"
+        description: "Check your intimacy with Teto and timer cooldowns"
       },
       %{
         name: "feed",

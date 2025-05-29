@@ -26,10 +26,61 @@ defmodule TetoBot.Interactions do
   - The result of the interaction handler or :ok if unhandled.
   """
   def handle_interaction(%Interaction{data: %{name: "ping"}} = interaction, _ws_state) do
-    create_response(interaction, "pong", ephemeral: true)
+    handle_ping(interaction)
   end
 
   def handle_interaction(%Interaction{data: %{name: "help"}} = interaction, _ws_state) do
+    handle_help(interaction)
+  end
+
+  def handle_interaction(
+        %Interaction{
+          data: %{name: "teto"},
+          user: %User{id: user_id},
+          guild_id: guild_id,
+          channel_id: channel_id
+        } = interaction,
+        _ws_state
+      ) do
+    handle_teto(interaction, user_id, guild_id, channel_id)
+  end
+
+  def handle_interaction(
+        %Interaction{
+          data: %{name: "feed"},
+          user: %User{id: user_id},
+          guild_id: guild_id,
+          channel_id: channel_id
+        } = interaction,
+        _ws_state
+      ) do
+    handle_feed(interaction, user_id, guild_id, channel_id)
+  end
+
+  def handle_interaction(
+        %Interaction{data: %{name: "leaderboard"}, guild_id: guild_id} = interaction,
+        _ws_state
+      ) do
+    handle_leaderboard(interaction, guild_id)
+  end
+
+  def handle_interaction(%Interaction{data: %{name: "whitelist"}} = interaction, _ws_state) do
+    handle_whitelist(interaction)
+  end
+
+  def handle_interaction(%Interaction{data: %{name: "blacklist"}} = interaction, _ws_state) do
+    handle_blacklist(interaction)
+  end
+
+  def handle_interaction(_interaction, _ws_state), do: :ok
+
+  # Command Handlers
+
+  defp handle_ping(interaction) do
+    create_response(interaction, "pong", ephemeral: true)
+  end
+
+  defp handle_help(interaction) do
     help_message = """
     **TetoBot Help**
 
@@ -48,43 +99,47 @@ defmodule TetoBot.Interactions do
     create_response(interaction, help_message, ephemeral: true)
   end
 
-  def handle_interaction(
-        %Interaction{
-          data: %{name: "teto"},
-          user: %User{id: user_id},
-          guild_id: guild_id,
-          channel_id: channel_id
-        } =
-          interaction,
-        _ws_state
-      ) do
-    if Channels.whitelisted?(channel_id) do
+  defp handle_teto(interaction, user_id, guild_id, channel_id) do
+    with_whitelisted_channel(interaction, channel_id, fn ->
       case Leaderboards.get_intimacy(guild_id, user_id) do
         {:ok, intimacy} ->
           {curr, next} = LLM.get_intimacy_info(intimacy)
           {curr_val, curr_tier} = curr
           {next_val, next_tier} = next
 
-          tier_up_msg =
+          next_tier_hint_msg =
             if curr_tier == next_tier do
               "Highest Tier(#{curr_tier}) Reached"
             else
               diff = next_val - curr_val
-              "#{diff} More Intimacy to Reach Next Tier: #{next_tier}"
+              "**#{diff}** More Intimacy to Reach Next Tier: #{next_tier}"
+            end
+
+          feed_cooldown_msg =
+            case Leaderboards.check_feed_cooldown(guild_id, user_id) do
+              {:ok, :allowed} ->
+                "You __can__ feed Teto now"
+
+              {:error, time_left} when is_integer(time_left) ->
+                "The next feed reset is in #{format_time_left(time_left)}"
+
+              {:error, reason} ->
+                Logger.error(
+                  "Failed to check feed cooldown for user #{user_id} in guild #{guild_id}: #{inspect(reason)}"
+                )
+
+                "Failed to get feed cooldown"
             end
 
           response = """
           **Intimacy:** #{intimacy}
           **Relationship:** #{curr_tier}
+          #{next_tier_hint_msg}
 
-          #{tier_up_msg}
+          #{feed_cooldown_msg}.
           """
 
-          create_response(
-            interaction,
-            response,
-            ephemeral: true
-          )
+          create_response(interaction, response, ephemeral: true)
 
         {:error, reason} ->
           Logger.error(
@@ -97,41 +152,24 @@ defmodule TetoBot.Interactions do
             ephemeral: true
           )
       end
-    else
-      create_response(
-        interaction,
-        "This command can only be used in whitelisted channels.",
-        ephemeral: true
-      )
-    end
+    end)
   end
 
-  def handle_interaction(
-        %Interaction{
-          data: %{name: "feed"},
-          user: %User{id: user_id},
-          guild_id: guild_id
-        } =
+  defp handle_feed(interaction, user_id, guild_id, channel_id) do
+    with_whitelisted_channel(interaction, channel_id, fn ->
+      with {:ok, :allowed} <- Leaderboards.check_feed_cooldown(guild_id, user_id) do
+        Leaderboards.increment_intimacy!(guild_id, user_id, 5)
+        {:ok, intimacy} = Leaderboards.get_intimacy(guild_id, user_id)
+
+        create_response(
           interaction,
-        _ws_state
-      ) do
-    if Channels.whitelisted?(interaction.channel_id) do
-      case Leaderboards.check_feed_cooldown(guild_id, user_id) do
-        {:ok, :allowed} ->
-          Leaderboards.increment_intimacy!(guild_id, user_id, 5)
-          {:ok, intimacy} = Leaderboards.get_intimacy(guild_id, user_id)
-
-          create_response(
-            interaction,
-            "You fed Teto! Your intimacy with her increased by 5.\nCurrent intimacy: #{intimacy}. 💖"
-          )
-
+          "You fed Teto! Your intimacy with her increased by 5.\nCurrent intimacy: #{intimacy}. 💖"
+        )
+      else
         {:error, time_left} when is_integer(time_left) ->
-          time_left_formatted = format_time_left(time_left)
-
           create_response(
             interaction,
-            "You've already fed Teto today! Try again in #{time_left_formatted}."
+            "You've already fed Teto today! Try again in #{format_time_left(time_left)}."
           )
 
         {:error, reason} ->
@@ -145,41 +183,35 @@ defmodule TetoBot.Interactions do
             ephemeral: true
           )
       end
-    else
-      create_response(
-        interaction,
-        "This command can only be used in whitelisted channels.",
-        ephemeral: true
-      )
-    end
+    end)
   end
 
-  def handle_interaction(
-        %Interaction{data: %{name: "leaderboard"}, guild_id: guild_id} = interaction,
-        _ws_state
-      ) do
+  defp handle_leaderboard(interaction, guild_id) do
     guild_id_str = Integer.to_string(guild_id)
     leaderboard_key = "leaderboard:#{guild_id_str}"
 
     case Redix.command(:redix, ["ZREVRANGE", leaderboard_key, 0, 9, "WITHSCORES"]) do
       {:ok, []} ->
-        create_response(
-          interaction,
-          "No one has earned intimacy with Teto in this guild yet!"
-        )
+        create_response(interaction, "No one has earned intimacy with Teto in this guild yet!")
 
       {:ok, entries} ->
         leaderboard =
           Enum.chunk_every(entries, 2)
           |> Enum.with_index(1)
-          |> Enum.map(fn {[user_id, intimacy], rank} ->
-            case Nostrum.Api.User.get(user_id) do
-              {:ok, user} ->
-                "#{rank}. #{user.global_name} - Intimacy: #{intimacy}"
+          |> Enum.map(fn {[user_id_str, intimacy], rank} ->
+            user_id = String.to_integer(user_id_str)
 
+            with {:ok, member} <- Api.Guild.member(guild_id, user_id),
+                 {:ok, user} <- Api.User.get(user_id) do
+              maybe_nickname = if member.nick, do: member.nick, else: user.global_name
+              "#{rank}. #{maybe_nickname} - #{intimacy}"
+            else
               {:error, reason} ->
-                Logger.error("Failed to get username for user #{user_id}: #{inspect(reason)}")
-                "#{rank}. Unknown - Intimacy: #{intimacy}"
+                Logger.error(
+                  "Failed to get nickname or global_name for member #{user_id_str}: #{inspect(reason)}"
+                )
+
+                "#{rank}. Unknown - #{intimacy}"
             end
           end)
           |> Enum.join("\n")
@@ -202,24 +234,22 @@ defmodule TetoBot.Interactions do
     end
   end
 
-  def handle_interaction(%Interaction{data: %{name: "whitelist"}} = interaction, _ws_state) do
+  defp handle_whitelist(interaction) do
     if can_manage_channels?(interaction) do
       channel_id = get_channel_id_from_options(interaction.data.options)
 
       case Channels.whitelist_channel(channel_id) do
         {:ok, _channel} ->
-          create_response(
-            interaction,
-            "Channel <##{channel_id}> whitelisted successfully!",
+          create_response(interaction, "Channel <##{channel_id}> whitelisted successfully!",
             ephemeral: true
           )
 
         {:error, changeset} ->
           Logger.error("Failed to whitelist channel #{channel_id}: #{inspect(changeset.errors)}")
-          {error_msg, _} = changeset.errors |> Keyword.get(:channel_id)
+          {error_msg, _} = Keyword.get(changeset.errors, :channel_id)
 
           response_content =
-            if is_binary(error_msg) && error_msg |> String.contains?("has already been taken") do
+            if is_binary(error_msg) && String.contains?(error_msg, "has already been taken") do
               "Channel <##{channel_id}> is already whitelisted."
             else
               "Failed to whitelist channel <##{channel_id}>. Please check the logs."
@@ -236,7 +266,7 @@ defmodule TetoBot.Interactions do
     end
   end
 
-  def handle_interaction(%Interaction{data: %{name: "blacklist"}} = interaction, _ws_state) do
+  defp handle_blacklist(interaction) do
     if can_manage_channels?(interaction) do
       channel_id = get_channel_id_from_options(interaction.data.options)
 
@@ -249,9 +279,7 @@ defmodule TetoBot.Interactions do
           )
 
         {:error, :not_found} ->
-          create_response(
-            interaction,
-            "Channel <##{channel_id}> was not found in the whitelist.",
+          create_response(interaction, "Channel <##{channel_id}> was not found in the whitelist.",
             ephemeral: true
           )
 
@@ -273,8 +301,11 @@ defmodule TetoBot.Interactions do
     end
   end
 
-  def handle_interaction(_interaction, _ws_state), do: :ok
+  # Helpers
 
+  @doc """
+  Creates a response for a Discord interaction.
+  """
   def create_response(interaction, content, opts \\ []) do
     ephemeral = Keyword.get(opts, :ephemeral)
     flags = if ephemeral, do: Constants.ephemeral_flag(), else: nil
@@ -291,33 +322,12 @@ defmodule TetoBot.Interactions do
   end
 
   @doc """
-  Creates an ephemeral response for a Discord interaction.
-
-  ## Parameters
-  - interaction: The Nostrum.Struct.Interaction struct.
-  - content: The string content of the ephemeral response.
-
-  ## Returns
-  - The result of Nostrum.Api.Interaction.create_response/2.
-  """
-  def create_ephemeral_response(interaction, content) do
-    create_response(interaction, content, ephemeral: true)
-  end
-
-  @doc """
   Checks if the user invoking the interaction has the "Manage Channels" permission.
-
-  ## Parameters
-  - interaction: The Nostrum.Struct.Interaction struct.
-
-  ## Returns
-  - `true` if the user has "Manage Channels" permission, `false` otherwise.
   """
   def can_manage_channels?(%Interaction{guild_id: guild_id, member: member})
       when not is_nil(guild_id) and not is_nil(member) do
     case Guild.get(guild_id) do
       {:ok, guild} ->
-        # Ignore channel permission override, otherwise I ll go bankrupt
         :manage_channels in Nostrum.Struct.Guild.Member.guild_permissions(member, guild)
 
       {:error, reason} ->
@@ -331,7 +341,18 @@ defmodule TetoBot.Interactions do
     false
   end
 
-  ## Private
+  # Private Helpers
+
+  defp with_whitelisted_channel(interaction, channel_id, fun) do
+    if Channels.whitelisted?(channel_id) do
+      fun.()
+    else
+      create_response(interaction, "This command can only be used in whitelisted channels.",
+        ephemeral: true
+      )
+    end
+  end
+
   defp get_channel_id_from_options(options) do
     Enum.find(options, fn opt -> opt.name == "channel" end).value
   end
@@ -342,14 +363,9 @@ defmodule TetoBot.Interactions do
     seconds_left = rem(seconds, 60)
 
     case {hours, minutes, seconds_left} do
-      {0, 0, s} ->
-        "#{s} second#{if s != 1, do: "s", else: ""}"
-
-      {0, m, s} ->
-        "#{m} minute#{if m != 1, do: "s", else: ""} and #{s} second#{if s != 1, do: "s", else: ""}"
-
-      {h, m, _s} ->
-        "#{h} hour#{if h != 1, do: "s", else: ""} and #{m} minute#{if m != 1, do: "s", else: ""}"
+      {0, 0, s} -> "#{s} second#{if s != 1, do: "s", else: ""}"
+      {0, m, s} -> "#{m}m #{s}sec"
+      {h, m, _s} -> "#{h}h #{m}min"
     end
   end
 end
