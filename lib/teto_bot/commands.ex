@@ -21,7 +21,7 @@ defmodule TetoBot.Commands do
       },
       %{
         name: "feed",
-        description: "Feed Teto to increase your intimacy with her"
+        description: "Feed baguettes to Teto to increase your intimacy with her"
       },
       %{
         name: "leaderboard",

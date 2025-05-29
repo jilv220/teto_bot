@@ -18,7 +18,6 @@ defmodule TetoBot.Consumer do
   alias TetoBot.Interactions
   alias TetoBot.LLM
   alias TetoBot.RateLimiter
-  alias TetoBot.MessageContext
 
   def handle_event({:READY, %{guilds: guilds} = _msg, _}) do
     Logger.debug("Bot is ready, guilds: #{inspect(guilds)}")
@@ -140,7 +139,13 @@ defmodule TetoBot.Consumer do
       end
     end
 
-    context = MessageContext.get_context(channel_id)
+    # Build context map
+    context = %{
+      messages: TetoBot.MessageContext.get_context(channel_id),
+      guild_id: guild_id,
+      user_id: user_id
+    }
+
     response = openai |> LLM.generate_response!(context)
 
     {:ok, _} =

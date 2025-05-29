@@ -52,13 +52,37 @@ defmodule TetoBot.Interactions do
         _ws_state
       ) do
     if Channels.whitelisted?(interaction.channel_id) do
-      initmacy_amount = 5
-      Leaderboards.increment_intimacy!(guild_id, user_id, initmacy_amount)
+      case Leaderboards.check_feed_cooldown(guild_id, user_id) do
+        {:ok, :allowed} ->
+          Leaderboards.increment_intimacy!(guild_id, user_id, 5)
+          {:ok, intimacy} = Leaderboards.get_intimacy(guild_id, user_id)
 
-      create_response(
-        interaction,
-        "You fed Teto! Your intimacy with her increased by #{initmacy_amount}. 💖"
-      )
+          create_response(
+            interaction,
+            "You fed Teto! Your intimacy with her increased by 5. Current intimacy: #{intimacy}. 💖",
+            ephemeral: true
+          )
+
+        {:error, time_left} when is_integer(time_left) ->
+          time_left_formatted = format_time_left(time_left)
+
+          create_response(
+            interaction,
+            "You've already fed Teto today! Try again in #{time_left_formatted}.",
+            ephemeral: true
+          )
+
+        {:error, reason} ->
+          Logger.error(
+            "Failed to check feed cooldown for user #{user_id} in guild #{guild_id}: #{inspect(reason)}"
+          )
+
+          create_response(
+            interaction,
+            "Something went wrong while checking the cooldown. Please try again later.",
+            ephemeral: true
+          )
+      end
     else
       create_response(
         interaction,
@@ -87,7 +111,7 @@ defmodule TetoBot.Interactions do
           Enum.chunk_every(entries, 2)
           |> Enum.with_index(1)
           |> Enum.map(fn {[user_id, intimacy], rank} ->
-            "<@#{user_id}> - Intimacy: #{intimacy} (Rank #{rank})"
+            "#{rank}. <@#{user_id}> - Intimacy: #{intimacy}"
           end)
           |> Enum.join("\n")
 
@@ -238,7 +262,25 @@ defmodule TetoBot.Interactions do
     false
   end
 
+  ## Private
   defp get_channel_id_from_options(options) do
     Enum.find(options, fn opt -> opt.name == "channel" end).value
+  end
+
+  defp format_time_left(seconds) do
+    hours = div(seconds, 3600)
+    minutes = div(rem(seconds, 3600), 60)
+    seconds_left = rem(seconds, 60)
+
+    case {hours, minutes, seconds_left} do
+      {0, 0, s} ->
+        "#{s} second#{if s != 1, do: "s", else: ""}"
+
+      {0, m, s} ->
+        "#{m} minute#{if m != 1, do: "s", else: ""} and #{s} second#{if s != 1, do: "s", else: ""}"
+
+      {h, m, _s} ->
+        "#{h} hour#{if h != 1, do: "s", else: ""} and #{m} minute#{if m != 1, do: "s", else: ""}"
+    end
   end
 end
