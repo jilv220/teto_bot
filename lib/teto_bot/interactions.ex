@@ -5,6 +5,8 @@ defmodule TetoBot.Interactions do
 
   require Logger
 
+  alias TetoBot.LLM
+  alias Nostrum.Struct.User
   alias TetoBot.Leaderboards
   alias Nostrum.Api
   alias Nostrum.Api.Guild
@@ -47,7 +49,69 @@ defmodule TetoBot.Interactions do
   end
 
   def handle_interaction(
-        %Interaction{data: %{name: "feed"}, guild_id: guild_id, user: %{id: user_id}} =
+        %Interaction{
+          data: %{name: "teto"},
+          user: %User{id: user_id},
+          guild_id: guild_id,
+          channel_id: channel_id
+        } =
+          interaction,
+        _ws_state
+      ) do
+    if Channels.whitelisted?(channel_id) do
+      case Leaderboards.get_intimacy(guild_id, user_id) do
+        {:ok, intimacy} ->
+          {curr, next} = LLM.get_intimacy_info(intimacy)
+          {curr_val, curr_tier} = curr
+          {next_val, next_tier} = next
+
+          tier_up_msg =
+            if curr_tier == next_tier do
+              "Highest Tier(#{curr_tier}) Reached"
+            else
+              diff = next_val - curr_val
+              "#{diff} More Intimacy to Reach Next Tier: #{next_tier}"
+            end
+
+          response = """
+          **Intimacy:** #{intimacy}
+          **Relationship:** #{curr_tier}
+
+          #{tier_up_msg}
+          """
+
+          create_response(
+            interaction,
+            response,
+            ephemeral: true
+          )
+
+        {:error, reason} ->
+          Logger.error(
+            "Failed to get intimacy info for user #{user_id} in guild #{guild_id}: #{inspect(reason)}"
+          )
+
+          create_response(
+            interaction,
+            "Something went wrong while retrieving user intimacy info. Please try again later.",
+            ephemeral: true
+          )
+      end
+    else
+      create_response(
+        interaction,
+        "This command can only be used in whitelisted channels.",
+        ephemeral: true
+      )
+    end
+  end
+
+  def handle_interaction(
+        %Interaction{
+          data: %{name: "feed"},
+          user: %User{id: user_id},
+          guild_id: guild_id
+        } =
           interaction,
         _ws_state
       ) do
@@ -109,7 +173,14 @@ defmodule TetoBot.Interactions do
           Enum.chunk_every(entries, 2)
           |> Enum.with_index(1)
           |> Enum.map(fn {[user_id, intimacy], rank} ->
-            "#{rank}. <@#{user_id}> - Intimacy: #{intimacy}"
+            case Nostrum.Api.User.get(user_id) do
+              {:ok, user} ->
+                "#{rank}. #{user.global_name} - Intimacy: #{intimacy}"
+
+              {:error, reason} ->
+                Logger.error("Failed to get username for user #{user_id}: #{inspect(reason)}")
+                "#{rank}. Unknown - Intimacy: #{intimacy}"
+            end
           end)
           |> Enum.join("\n")
 

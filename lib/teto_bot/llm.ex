@@ -148,6 +148,38 @@ defmodule TetoBot.LLM do
     end
   end
 
+  def get_intimacy_tier(intimacy) do
+    intimacy_list = [{101, "Close Friend"}, {51, "Friend"}, {11, "Acquaintance"}, {0, "Stranger"}]
+
+    {_, intimacy_tier} =
+      intimacy_list
+      |> Enum.find(fn {k, _v} -> intimacy >= k end)
+
+    intimacy_tier
+  end
+
+  @spec get_intimacy_info(integer()) :: {{integer(), binary()}, {integer(), binary()}}
+  def get_intimacy_info(intimacy) do
+    intimacy_list = [{101, "Close Friend"}, {51, "Friend"}, {11, "Acquaintance"}, {0, "Stranger"}]
+
+    curr_intimacy_idx =
+      intimacy_list
+      |> Enum.find_index(fn {k, _v} -> intimacy >= k end)
+
+    {_, curr_intimacy_tier} =
+      intimacy_list
+      |> Enum.at(curr_intimacy_idx)
+
+    next_tier_intimacy_idx = curr_intimacy_idx - 1
+
+    # default to highest tier if out of bound
+    next_tier_intimacy_entry =
+      intimacy_list
+      |> Enum.at(next_tier_intimacy_idx, Enum.at(intimacy_list, 0))
+
+    {{intimacy, curr_intimacy_tier}, next_tier_intimacy_entry}
+  end
+
   ## Private
   defp fetch_intimacy(guild_id, user_id) do
     if guild_id && user_id do
@@ -157,15 +189,6 @@ defmodule TetoBot.LLM do
       end
     else
       0
-    end
-  end
-
-  defp get_intimacy_tier(intimacy) do
-    cond do
-      intimacy >= 101 -> "Close Friend"
-      intimacy >= 51 -> "Friend"
-      intimacy >= 11 -> "Acquaintance"
-      true -> "Stranger"
     end
   end
 end

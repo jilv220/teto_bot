@@ -20,6 +20,10 @@ defmodule TetoBot.Commands do
         description: "Display information about the bot and its commands"
       },
       %{
+        name: "teto",
+        description: "Check your intimacy with Teto"
+      },
+      %{
         name: "feed",
         description: "Feed baguettes to Teto to increase your intimacy with her"
       },

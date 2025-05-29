@@ -10,10 +10,6 @@ defmodule TetoBot.Leaderboards do
   - `{:ok, intimacy}` if the score is found, where `intimacy` is an integer.
   - `{:ok, 0}` if the user is not in the leaderboard.
   - `{:error, reason}` if a Redis error occurs.
-
-  ## Examples
-  - `{:ok, 123}` for a user with 123 intimacy.
-  - `{:ok, :redix}` if Redis fails.
   """
   def get_intimacy(guild_id, user_id) do
     user_id_str = Integer.to_string(user_id)
