@@ -59,8 +59,7 @@ defmodule TetoBot.Interactions do
 
           create_response(
             interaction,
-            "You fed Teto! Your intimacy with her increased by 5. Current intimacy: #{intimacy}. 💖",
-            ephemeral: true
+            "You fed Teto! Your intimacy with her increased by 5.\nCurrent intimacy: #{intimacy}. 💖"
           )
 
         {:error, time_left} when is_integer(time_left) ->
@@ -68,8 +67,7 @@ defmodule TetoBot.Interactions do
 
           create_response(
             interaction,
-            "You've already fed Teto today! Try again in #{time_left_formatted}.",
-            ephemeral: true
+            "You've already fed Teto today! Try again in #{time_left_formatted}."
           )
 
         {:error, reason} ->

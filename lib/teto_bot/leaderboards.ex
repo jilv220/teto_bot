@@ -77,10 +77,6 @@ defmodule TetoBot.Leaderboards do
   - `{:error, time_left}` if the cooldown is active, where `time_left` is the seconds until reset.
   - `{:error, reason}` if a Redis error occurs.
 
-  ## Raises
-  - `Redix.ConnectionError`: If the Redis server is unreachable.
-  - `Redix.Error`: If Redis commands fail.
-
   ## Examples
       iex> TetoBot.Leaderboard.check_feed_cooldown(12345, 67890)
       {:ok, :allowed}
