@@ -5,6 +5,7 @@ defmodule TetoBot.Interactions do
 
   require Logger
 
+  alias TetoBot.Leaderboards
   alias Nostrum.Api
   alias Nostrum.Api.Guild
   alias Nostrum.Struct.Interaction
@@ -51,19 +52,12 @@ defmodule TetoBot.Interactions do
         _ws_state
       ) do
     if Channels.whitelisted?(interaction.channel_id) do
-      user_id_str = Integer.to_string(user_id)
-      guild_id_str = Integer.to_string(guild_id)
-      leaderboard_key = "leaderboard:#{guild_id_str}"
-      updated_users_key = "updated_users:#{guild_id_str}"
-
-      Redix.pipeline!(:redix, [
-        ["ZINCRBY", leaderboard_key, "5", user_id_str],
-        ["SADD", updated_users_key, user_id_str]
-      ])
+      initmacy_amount = 5
+      Leaderboards.increment_intimacy!(guild_id, user_id, initmacy_amount)
 
       create_response(
         interaction,
-        "You fed Teto! Your intimacy with her increased by 5. 💖"
+        "You fed Teto! Your intimacy with her increased by #{initmacy_amount}. 💖"
       )
     else
       create_response(

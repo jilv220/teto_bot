@@ -29,6 +29,10 @@ defmodule TetoBot.LLM do
     |> OpenaiEx.with_receive_timeout(30_000)
   end
 
+  @spec generate_response!(
+          %OpenaiEx{},
+          any()
+        ) :: binary()
   @doc """
   Generates a response from the LLM using the conversation context.
 
@@ -36,7 +40,7 @@ defmodule TetoBot.LLM do
     - openai: OpenaiEx client
     - context: List of message strings in chronological order
   """
-  def generate_response(openai, context) do
+  def generate_response!(openai, context) do
     {:ok, sys_prompt} = LLM.Context.get_system_prompt()
 
     model_name = Application.get_env(:teto_bot, :llm_model_name, "grok-3-mini")
