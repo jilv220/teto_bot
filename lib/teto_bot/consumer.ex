@@ -3,6 +3,7 @@ defmodule TetoBot.Consumer do
 
   require Logger
 
+  alias TetoBot.Leaderboards
   alias Nostrum.Cache.MessageCache
   alias Nostrum.Api.Message
   alias Nostrum.Api
@@ -17,7 +18,6 @@ defmodule TetoBot.Consumer do
   alias TetoBot.Interactions
   alias TetoBot.LLM
   alias TetoBot.RateLimiter
-  alias TetoBot.MessageContext
 
   def handle_event({:READY, %{guilds: guilds} = _msg, _}) do
     Logger.debug("Bot is ready, guilds: #{inspect(guilds)}")
@@ -102,10 +102,11 @@ defmodule TetoBot.Consumer do
 
   defp generate_and_send_response(
          %Message{
-           author: %User{username: username},
+           author: %User{username: username, id: user_id},
            content: content,
            attachments: attachments,
            channel_id: channel_id,
+           guild_id: guild_id,
            id: message_id
          } = msg
        ) do
@@ -138,14 +139,22 @@ defmodule TetoBot.Consumer do
       end
     end
 
-    context = MessageContext.get_context(channel_id)
-    response = openai |> LLM.generate_response(context)
+    # Build context map
+    context = %{
+      messages: TetoBot.MessageContext.get_context(channel_id),
+      guild_id: guild_id,
+      user_id: user_id
+    }
+
+    response = openai |> LLM.generate_response!(context)
 
     {:ok, _} =
       Api.Message.create(channel_id,
         content: response,
         message_reference: %{message_id: message_id}
       )
+
+    Leaderboards.increment_intimacy!(guild_id, user_id, 1)
 
     :ok
   end

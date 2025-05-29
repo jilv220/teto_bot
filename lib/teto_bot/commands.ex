@@ -20,6 +20,14 @@ defmodule TetoBot.Commands do
         description: "Display information about the bot and its commands"
       },
       %{
+        name: "feed",
+        description: "Feed baguettes to Teto to increase your intimacy with her"
+      },
+      %{
+        name: "leaderboard",
+        description: "Display the top 10 users with the highest intimacy in this guild"
+      },
+      %{
         name: "whitelist",
         description:
           "Whitelist a channel for the bot to operate in (requires Manage Channels permission)",

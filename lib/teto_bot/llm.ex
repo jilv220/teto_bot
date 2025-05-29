@@ -29,6 +29,11 @@ defmodule TetoBot.LLM do
     |> OpenaiEx.with_receive_timeout(30_000)
   end
 
+  @spec generate_response!(%OpenaiEx{}, %{
+          messages: list(),
+          guild_id: integer() | nil,
+          user_id: integer() | nil
+        }) :: binary()
   @doc """
   Generates a response from the LLM using the conversation context.
 
@@ -36,20 +41,33 @@ defmodule TetoBot.LLM do
     - openai: OpenaiEx client
     - context: List of message strings in chronological order
   """
-  def generate_response(openai, context) do
+  def generate_response!(openai, context) do
+    messages = Map.get(context, :messages, [])
+    guild_id = Map.get(context, :guild_id)
+    user_id = Map.get(context, :user_id)
+
+    intimacy = fetch_intimacy(guild_id, user_id)
+    tier = get_intimacy_tier(intimacy)
+
     {:ok, sys_prompt} = LLM.Context.get_system_prompt()
+
+    sys_prompt =
+      """
+      Your responses should reflect your intimacy level with the user, determined by their tier: #{tier} (Score: #{intimacy}).\n
+      """ <> sys_prompt
 
     model_name = Application.get_env(:teto_bot, :llm_model_name, "grok-3-mini")
     max_words = Application.get_env(:teto_bot, :llm_max_words, 50)
 
+    # LLM configuration
     temperature = Application.get_env(:teto_bot, :llm_temperature, 0.7)
     top_p = Application.get_env(:teto_bot, :llm_top_p, 0.9)
     top_k = Application.get_env(:teto_bot, :llm_top_k, 40)
 
-    messages =
+    messages_for_llm =
       [
         ChatMessage.system(sys_prompt <> "\nKeep responses under #{max_words} words.")
-        | Enum.map(context, fn
+        | Enum.map(messages, fn
             {:user, username, content} ->
               ChatMessage.user("from " <> username <> ": " <> content)
 
@@ -61,7 +79,7 @@ defmodule TetoBot.LLM do
     chat_req =
       Chat.Completions.new(
         model: model_name,
-        messages: messages,
+        messages: messages_for_llm,
         temperature: temperature,
         top_p: top_p,
         top_k: top_k
@@ -127,6 +145,27 @@ defmodule TetoBot.LLM do
 
       {:error, error} ->
         {:error, error}
+    end
+  end
+
+  ## Private
+  defp fetch_intimacy(guild_id, user_id) do
+    if guild_id && user_id do
+      case TetoBot.Leaderboards.get_intimacy(guild_id, user_id) do
+        {:ok, score} -> score
+        {:error, _} -> 0
+      end
+    else
+      0
+    end
+  end
+
+  defp get_intimacy_tier(intimacy) do
+    cond do
+      intimacy >= 101 -> "Close Friend"
+      intimacy >= 51 -> "Friend"
+      intimacy >= 11 -> "Acquaintance"
+      true -> "Stranger"
     end
   end
 end

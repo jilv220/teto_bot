@@ -21,6 +21,7 @@ defmodule TetoBot.Application do
     children = [
       {Redix, redis_options},
       TetoBot.Repo,
+      TetoBot.Leaderboards.Sync,
       {Nostrum.Bot, bot_options}
     ]
 
