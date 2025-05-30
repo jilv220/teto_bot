@@ -24,10 +24,10 @@ defmodule TetoBot.Consumer do
     Commands.register_commands(guilds)
   end
 
-  # Persist guilds here
   def handle_event({:GUILD_AVAILABLE, %Guild{id: guild_id} = _guild, _ws_state}) do
     Logger.info("Guild #{guild_id} is now available")
 
+    # Persist guilds before decay update
     case TetoBot.Cache.Guild.exists?(guild_id) do
       {:ok, false} -> TetoBot.Cache.Guild.add_id(guild_id)
       _ -> :ok

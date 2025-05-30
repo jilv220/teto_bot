@@ -39,8 +39,7 @@ defmodule TetoBot.Leaderboards.Sync do
             []
         end
 
-      for guild_id <- guild_ids do
-        guild_id_str = Integer.to_string(guild_id)
+      for guild_id_str <- guild_ids do
         updated_users_key = "updated_users:#{guild_id_str}"
         updated_users = Redix.command!(:redix, ["SMEMBERS", updated_users_key])
 
@@ -51,6 +50,7 @@ defmodule TetoBot.Leaderboards.Sync do
             Redix.pipeline!(:redix, Enum.map(updated_users, &["ZSCORE", leaderboard_key, &1]))
 
           for {user_id_str, intimacy_str} <- Enum.zip(updated_users, intimacies) do
+            guild_id = String.to_integer(guild_id_str)
             user_id = String.to_integer(user_id_str)
             intimacy = String.to_integer(intimacy_str)
 
