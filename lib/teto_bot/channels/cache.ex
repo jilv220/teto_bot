@@ -21,7 +21,7 @@ defmodule TetoBot.Channels.Cache do
   """
   def exists?(channel_id) when Snowflake.is_snowflake(channel_id) do
     case :ets.lookup(__MODULE__, channel_id) do
-      [{channel_id, channel_id}] -> true
+      [{^channel_id, ^channel_id}] -> true
       [] -> false
     end
   end

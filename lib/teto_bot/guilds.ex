@@ -6,7 +6,8 @@ defmodule TetoBot.Guilds do
 
   @repo Application.compile_env(:teto_bot, :repo, TetoBot.Repo)
 
-  @spec guild_create(Snowflake.t()) :: {:ok, Ecto.Schema.t()} | {:error, Ecto.Changeset.t()}
+  @spec guild_create(Snowflake.t()) ::
+          {:ok, Ecto.Schema.t()} | {:error, Ecto.Changeset.t()} | {:error, :invalid_id}
   @doc """
   A guild added our app
   Insert a new guild record `guilds` table
@@ -17,8 +18,13 @@ defmodule TetoBot.Guilds do
     |> @repo.insert([])
   end
 
+  def guild_create(_), do: :invalid_id
+
   @spec guild_delete(Snowflake.t()) ::
-          {:ok, Ecto.Schema.t()} | {:error, Ecto.Changeset.t()} | {:error, :not_found}
+          {:ok, Ecto.Schema.t()}
+          | {:error, Ecto.Changeset.t()}
+          | {:error, :not_found}
+          | {:error, :invalid_id}
   @doc """
   A guild removed our app
   Remove the record from `guilds` table
@@ -32,4 +38,6 @@ defmodule TetoBot.Guilds do
         @repo.delete(guild, [])
     end
   end
+
+  def guild_delete(_), do: :invalid_id
 end

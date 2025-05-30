@@ -1,4 +1,11 @@
 defmodule TetoBot.Messages do
+  @moduledoc """
+  This module handles incoming messages for the TetoBot Discord bot, ensuring proper filtering, rate limiting,
+  image processing, and response generation using a Large Language Model (LLM).
+  It integrates with Nostrum for Discord API interactions and
+  custom modules for additional functionality, such as user engagement tracking and rate limiting.
+  """
+
   require Logger
 
   alias Nostrum.Api
@@ -10,6 +17,10 @@ defmodule TetoBot.Messages do
   alias TetoBot.LLM
   alias TetoBot.RateLimiter
 
+  @spec handle_msg(Nostrum.Struct.Message.t()) :: :ok
+  @doc """
+  Handles an incoming Discord message, determining if it should be processed and executing the appropriate action.
+  """
   def handle_msg(%Struct.Message{author: %Struct.User{id: author_id}} = msg) do
     bot_id = Bot.get_bot_name()
 
@@ -60,13 +71,16 @@ defmodule TetoBot.Messages do
          %Struct.Message{author: %Struct.User{id: user_id}, channel_id: channel_id} = msg
        ) do
     if RateLimiter.allow?(user_id) do
-      generate_and_send_response(msg)
+      generate_and_send_response!(msg)
     else
       send_rate_limit_warning(channel_id)
     end
   end
 
-  defp generate_and_send_response(
+  @spec generate_and_send_response!(Nostrum.Struct.Message.t()) :: :ok
+  @doc false
+  # Generates and sends a response using LLM, handling image attachments and updating metrics.
+  defp generate_and_send_response!(
          %Struct.Message{
            author: %Struct.User{username: username, id: user_id},
            content: content,
@@ -125,6 +139,9 @@ defmodule TetoBot.Messages do
     :ok
   end
 
+  @spec send_rate_limit_warning(integer()) :: :ok
+  @doc false
+  # Sends a rate limit warning to the channel.
   defp send_rate_limit_warning(channel_id) do
     Api.Message.create(channel_id,
       content: "You're sending messages too quickly! Please wait a moment."
