@@ -24,13 +24,25 @@ defmodule TetoBot.Consumer do
     Commands.register_commands(guilds)
   end
 
-  def handle_event({:GUILD_AVAILABLE, %Guild{id: guild_id} = _guild, _ws_state}) do
-    Logger.info("Guild #{guild_id} is now available")
+  def handle_event({:GUILD_CREATE, %Guild{id: new_guild_id} = _new_guild, _}) do
+    case TetoBot.Cache.Guild.exists?(new_guild_id) do
+      {:ok, false} ->
+        TetoBot.Cache.Guild.add_id(new_guild_id)
+        Logger.info("New guild #{new_guild_id} joined!")
 
-    # Persist guilds before decay update
-    case TetoBot.Cache.Guild.exists?(guild_id) do
-      {:ok, false} -> TetoBot.Cache.Guild.add_id(guild_id)
-      _ -> :ok
+      _ ->
+        :ok
+    end
+  end
+
+  def handle_event({:GUILD_DELETE, {%Guild{id: old_guild_id}, _}, _}) do
+    case TetoBot.Cache.Guild.exists?(old_guild_id) do
+      {:ok, true} ->
+        TetoBot.Cache.Guild.remove_id(old_guild_id)
+        Logger.info("Guild #{old_guild_id} has left us!")
+
+      _ ->
+        :ok
     end
   end
 
@@ -59,7 +71,10 @@ defmodule TetoBot.Consumer do
   end
 
   # Ignore any other events
-  def handle_event(_), do: :ok
+  def handle_event({evt_name, _, _}) do
+    IO.inspect(evt_name)
+    :ok
+  end
 
   defp handle_msg(
          %Message{

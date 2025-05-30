@@ -21,7 +21,7 @@ defmodule TetoBot.Cache.Guild do
   def add_id(guild_id) do
     case Redix.command(:redix, ["SADD", @guild_key, guild_id]) do
       {:ok, _count} ->
-        Logger.info("guild #{guild_id} added")
+        Logger.info("Guild #{guild_id} added")
         :ok
 
       {:error, reason} ->
@@ -47,7 +47,7 @@ defmodule TetoBot.Cache.Guild do
   def remove_id(guild_id) do
     case Redix.command(:redix, ["SREM", @guild_key, guild_id]) do
       {:ok, _count} ->
-        Logger.info("guild #{guild_id} removed")
+        Logger.info("Guild #{guild_id} removed")
         :ok
 
       {:error, reason} ->
