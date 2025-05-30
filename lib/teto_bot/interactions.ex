@@ -116,7 +116,7 @@ defmodule TetoBot.Interactions do
             end
 
           feed_cooldown_msg =
-            case Leaderboards.check_feed_cooldown!(guild_id, user_id) do
+            case Leaderboards.check_feed_cooldown(guild_id, user_id) do
               {:ok, :allowed} ->
                 "You __can__ feed Teto now"
 
@@ -157,7 +157,8 @@ defmodule TetoBot.Interactions do
 
   defp handle_feed(interaction, user_id, guild_id, channel_id) do
     with_whitelisted_channel(interaction, channel_id, fn ->
-      with {:ok, :allowed} <- Leaderboards.check_feed_cooldown!(guild_id, user_id) do
+      with {:ok, :allowed} <- Leaderboards.check_feed_cooldown(guild_id, user_id) do
+        Leaderboards.set_feed_cooldown!(guild_id, user_id)
         Leaderboards.increment_intimacy!(guild_id, user_id, 5)
         {:ok, intimacy} = Leaderboards.get_intimacy(guild_id, user_id)
 

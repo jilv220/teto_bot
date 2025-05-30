@@ -23,6 +23,8 @@ defmodule TetoBot.Leaderboards do
   - `Logger` for error logging.
   """
 
+  @feed_cooldown_duration 24 * 60 * 60
+
   require Logger
 
   @spec get_intimacy(integer(), integer()) ::
@@ -89,7 +91,7 @@ defmodule TetoBot.Leaderboards do
     :ok
   end
 
-  @spec check_feed_cooldown!(integer(), integer()) ::
+  @spec check_feed_cooldown(integer(), integer()) ::
           {:ok, :allowed} | {:error, integer()} | {:error, atom()}
   @doc """
   Checks if a user can use the `/feed` command in a guild and sets a 24-hour cooldown if allowed.
@@ -107,26 +109,13 @@ defmodule TetoBot.Leaderboards do
       iex> TetoBot.Leaderboards.check_feed_cooldown!(12345, 67890)
       {:error, 86300}
   """
-  def check_feed_cooldown!(guild_id, user_id) do
+  def check_feed_cooldown(guild_id, user_id) do
     user_id_str = Integer.to_string(user_id)
     guild_id_str = Integer.to_string(guild_id)
     cooldown_key = "feed_cooldown:#{guild_id_str}:#{user_id_str}"
 
-    # 24 hours in seconds
-    cooldown_duration = 24 * 60 * 60
-
-    # Combine cooldown and interaction update
-    set_cooldown = fn ->
-      Redix.pipeline!(:redix, [
-        ["SET", cooldown_key, System.system_time(:second)],
-        ["EXPIRE", cooldown_key, cooldown_duration],
-        get_interaction_update_command(guild_id, user_id)
-      ])
-    end
-
     case Redix.command(:redix, ["GET", cooldown_key]) do
       {:ok, nil} ->
-        set_cooldown.()
         {:ok, :allowed}
 
       {:ok, timestamp_str} ->
@@ -135,11 +124,10 @@ defmodule TetoBot.Leaderboards do
             now = System.system_time(:second)
             time_since = now - timestamp
 
-            if time_since >= cooldown_duration do
-              set_cooldown.()
+            if time_since >= @feed_cooldown_duration do
               {:ok, :allowed}
             else
-              time_left = cooldown_duration - time_since
+              time_left = @feed_cooldown_duration - time_since
               {:error, time_left}
             end
 
@@ -150,6 +138,17 @@ defmodule TetoBot.Leaderboards do
       {:error, reason} ->
         {:error, reason}
     end
+  end
+
+  def set_feed_cooldown!(guild_id, user_id) do
+    user_id_str = Integer.to_string(user_id)
+    guild_id_str = Integer.to_string(guild_id)
+    cooldown_key = "feed_cooldown:#{guild_id_str}:#{user_id_str}"
+
+    Redix.pipeline!(:redix, [
+      ["SET", cooldown_key, System.system_time(:second)],
+      ["EXPIRE", cooldown_key, @feed_cooldown_duration]
+    ])
   end
 
   @spec update_last_interaction(integer(), integer()) ::
