@@ -6,6 +6,7 @@ defmodule TetoBot.MixProject do
       app: :teto_bot,
       version: "0.1.0",
       elixir: "~> 1.17",
+      elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps()
     ]
@@ -19,6 +20,9 @@ defmodule TetoBot.MixProject do
     ]
   end
 
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
+
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
@@ -29,7 +33,9 @@ defmodule TetoBot.MixProject do
       {:postgrex, ">= 0.0.0"},
       {:redix, "~> 1.1"},
       {:castore, ">= 0.0.0"},
-      {:credo, "~> 1.6", only: [:dev, :test], runtime: false}
+      {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
+      {:ex_machina, "~> 2.7", only: :test},
+      {:mox, "~> 1.1", only: :test}
     ]
   end
 end
