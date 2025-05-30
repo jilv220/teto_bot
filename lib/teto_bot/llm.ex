@@ -22,10 +22,10 @@ defmodule TetoBot.LLM do
   # @spec get_client() :: OpenaiEx.t()
   def get_client do
     apikey = System.fetch_env!("LLM_API_KEY")
-    # base_url = System.fetch_env!("LLM_BASE_URL")
+    base_url = System.fetch_env!("LLM_BASE_URL")
 
     OpenaiEx.new(apikey)
-    # |> OpenaiEx.with_base_url(base_url)
+    |> OpenaiEx.with_base_url(base_url)
     |> OpenaiEx.with_receive_timeout(30_000)
   end
 

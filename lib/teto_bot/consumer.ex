@@ -125,7 +125,7 @@ defmodule TetoBot.Consumer do
       case LLM.summarize_image(openai, url) do
         {:ok, image_summary} ->
           Logger.debug("Image summary: #{inspect(image_summary)}")
-          # Override content field with image summary, then update the cache
+          # Attach content field with image summary, then update the cache
           update_payload = %{
             id: msg.id,
             content: content <> " Image attachment: " <> image_summary
