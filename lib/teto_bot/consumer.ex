@@ -71,10 +71,7 @@ defmodule TetoBot.Consumer do
   end
 
   # Ignore any other events
-  def handle_event({evt_name, _, _}) do
-    IO.inspect(evt_name)
-    :ok
-  end
+  def handle_event(_), do: :ok
 
   defp handle_msg(
          %Message{
