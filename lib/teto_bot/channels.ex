@@ -30,6 +30,8 @@ defmodule TetoBot.Channels do
     end
   end
 
+  def whitelist_channel(_), do: {:error, :invalid_id}
+
   @doc """
   Removes a channel from the whitelist (effectively blacklisting it).
   Deletes the channel record from the database.
@@ -52,6 +54,8 @@ defmodule TetoBot.Channels do
         end
     end
   end
+
+  def blacklist_channel(_), do: {:error, :invalid_id}
 
   @doc """
   Checks if a channel is whitelisted.

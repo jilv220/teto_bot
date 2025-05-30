@@ -5,7 +5,7 @@ defmodule TetoBot.Interactions do
 
   require Logger
 
-  alias TetoBot.LLM
+  alias TetoBot.Interactions.Teto
   alias Nostrum.Struct.User
   alias TetoBot.Leaderboards
   alias Nostrum.Api
@@ -35,14 +35,11 @@ defmodule TetoBot.Interactions do
 
   def handle_interaction(
         %Interaction{
-          data: %{name: "teto"},
-          user: %User{id: user_id},
-          guild_id: guild_id,
-          channel_id: channel_id
+          data: %{name: "teto"}
         } = interaction,
         _ws_state
       ) do
-    handle_teto(interaction, user_id, guild_id, channel_id)
+    Teto.handle_teto(interaction)
   end
 
   def handle_interaction(
@@ -97,62 +94,6 @@ defmodule TetoBot.Interactions do
     """
 
     create_response(interaction, help_message, ephemeral: true)
-  end
-
-  defp handle_teto(interaction, user_id, guild_id, channel_id) do
-    with_whitelisted_channel(interaction, channel_id, fn ->
-      case Leaderboards.get_intimacy(guild_id, user_id) do
-        {:ok, intimacy} ->
-          {curr, next} = LLM.get_intimacy_info(intimacy)
-          {curr_val, curr_tier} = curr
-          {next_val, next_tier} = next
-
-          next_tier_hint_msg =
-            if curr_tier == next_tier do
-              "Highest Tier(#{curr_tier}) Reached"
-            else
-              diff = next_val - curr_val
-              "**#{diff}** More Intimacy to Reach Next Tier: #{next_tier}"
-            end
-
-          feed_cooldown_msg =
-            case Leaderboards.check_feed_cooldown(guild_id, user_id) do
-              {:ok, :allowed} ->
-                "You __can__ feed Teto now"
-
-              {:error, time_left} when is_integer(time_left) ->
-                "The next feed reset is in #{format_time_left(time_left)}"
-
-              {:error, reason} ->
-                Logger.error(
-                  "Failed to check feed cooldown for user #{user_id} in guild #{guild_id}: #{inspect(reason)}"
-                )
-
-                "Failed to get feed cooldown"
-            end
-
-          response = """
-          **Intimacy:** #{intimacy}
-          **Relationship:** #{curr_tier}
-          #{next_tier_hint_msg}
-
-          #{feed_cooldown_msg}.
-          """
-
-          create_response(interaction, response, ephemeral: true)
-
-        {:error, reason} ->
-          Logger.error(
-            "Failed to get intimacy info for user #{user_id} in guild #{guild_id}: #{inspect(reason)}"
-          )
-
-          create_response(
-            interaction,
-            "Something went wrong while retrieving user intimacy info. Please try again later.",
-            ephemeral: true
-          )
-      end
-    end)
   end
 
   defp handle_feed(interaction, user_id, guild_id, channel_id) do
@@ -299,6 +240,7 @@ defmodule TetoBot.Interactions do
 
   # Helpers
 
+  @spec create_response(Interaction.t(), binary(), Keyword.t()) :: :ok | Api.error()
   @doc """
   Creates a response for a Discord interaction.
   """
@@ -337,9 +279,7 @@ defmodule TetoBot.Interactions do
     false
   end
 
-  # Private Helpers
-
-  defp with_whitelisted_channel(interaction, channel_id, fun) do
+  def with_whitelisted_channel(interaction, channel_id, fun) do
     if Channels.whitelisted?(channel_id) do
       fun.()
     else
@@ -348,6 +288,8 @@ defmodule TetoBot.Interactions do
       )
     end
   end
+
+  # Private Helpers
 
   defp format_time_left(seconds) do
     hours = div(seconds, 3600)
