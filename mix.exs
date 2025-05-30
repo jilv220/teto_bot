@@ -28,7 +28,8 @@ defmodule TetoBot.MixProject do
       {:ecto_sql, "~> 3.0"},
       {:postgrex, ">= 0.0.0"},
       {:redix, "~> 1.1"},
-      {:castore, ">= 0.0.0"}
+      {:castore, ">= 0.0.0"},
+      {:credo, "~> 1.6", only: [:dev, :test], runtime: false}
     ]
   end
 end

@@ -6,7 +6,7 @@ defmodule TetoBot.RateLimiter do
   @key_prefix "rate_limit:"
 
   def allow?(user_id) when Snowflake.is_snowflake(user_id) do
-    window = Application.get_env(:teto_bot, :rate_limit_window, 60)
+    window = Application.get_env(:teto_bot, :rate_limit_window, 6)
     max_requests = Application.get_env(:teto_bot, :rate_limit_max_requests, 5)
 
     now = DateTime.utc_now() |> DateTime.to_unix(:second)

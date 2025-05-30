@@ -22,6 +22,7 @@ defmodule TetoBot.Application do
       {Redix, redis_options},
       TetoBot.Repo,
       TetoBot.Leaderboards.Sync,
+      TetoBot.Leaderboards.Decay,
       {Nostrum.Bot, bot_options}
     ]
 

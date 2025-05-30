@@ -29,7 +29,15 @@ defmodule TetoBot.Leaderboards.Sync do
     Logger.info("Syncing leaderboards to Postgres")
 
     try do
-      guild_ids = get_guild_ids()
+      guild_ids =
+        case TetoBot.Cache.Guild.ids() do
+          {:ok, guild_ids} ->
+            guild_ids
+
+          {:error, reason} ->
+            Logger.error("Failed to get guild ids for sync to postgres: #{inspect(reason)}")
+            []
+        end
 
       for guild_id <- guild_ids do
         guild_id_str = Integer.to_string(guild_id)
@@ -68,10 +76,5 @@ defmodule TetoBot.Leaderboards.Sync do
     rescue
       e -> Logger.error("Failed to sync leaderboards: #{inspect(e)}")
     end
-  end
-
-  defp get_guild_ids do
-    Nostrum.Cache.GuildCache.all()
-    |> Enum.map(& &1.id)
   end
 end

@@ -116,7 +116,7 @@ defmodule TetoBot.Interactions do
             end
 
           feed_cooldown_msg =
-            case Leaderboards.check_feed_cooldown(guild_id, user_id) do
+            case Leaderboards.check_feed_cooldown!(guild_id, user_id) do
               {:ok, :allowed} ->
                 "You __can__ feed Teto now"
 
@@ -157,7 +157,7 @@ defmodule TetoBot.Interactions do
 
   defp handle_feed(interaction, user_id, guild_id, channel_id) do
     with_whitelisted_channel(interaction, channel_id, fn ->
-      with {:ok, :allowed} <- Leaderboards.check_feed_cooldown(guild_id, user_id) do
+      with {:ok, :allowed} <- Leaderboards.check_feed_cooldown!(guild_id, user_id) do
         Leaderboards.increment_intimacy!(guild_id, user_id, 5)
         {:ok, intimacy} = Leaderboards.get_intimacy(guild_id, user_id)
 
@@ -198,7 +198,7 @@ defmodule TetoBot.Interactions do
         leaderboard =
           Enum.chunk_every(entries, 2)
           |> Enum.with_index(1)
-          |> Enum.map(fn {[user_id_str, intimacy], rank} ->
+          |> Enum.map_join("\n", fn {[user_id_str, intimacy], rank} ->
             user_id = String.to_integer(user_id_str)
 
             with {:ok, member} <- Api.Guild.member(guild_id, user_id),
@@ -214,7 +214,6 @@ defmodule TetoBot.Interactions do
                 "#{rank}. Unknown - #{intimacy}"
             end
           end)
-          |> Enum.join("\n")
 
         message = """
         **Teto's Intimacy Leaderboard (Top 10)**\n
@@ -234,10 +233,8 @@ defmodule TetoBot.Interactions do
     end
   end
 
-  defp handle_whitelist(interaction) do
+  defp handle_whitelist(%Interaction{channel_id: channel_id} = interaction) do
     if can_manage_channels?(interaction) do
-      channel_id = get_channel_id_from_options(interaction.data.options)
-
       case Channels.whitelist_channel(channel_id) do
         {:ok, _channel} ->
           create_response(interaction, "Channel <##{channel_id}> whitelisted successfully!",
@@ -266,10 +263,8 @@ defmodule TetoBot.Interactions do
     end
   end
 
-  defp handle_blacklist(interaction) do
+  defp handle_blacklist(%Interaction{channel_id: channel_id} = interaction) do
     if can_manage_channels?(interaction) do
-      channel_id = get_channel_id_from_options(interaction.data.options)
-
       case Channels.blacklist_channel(channel_id) do
         {:ok, _channel} ->
           create_response(
@@ -351,10 +346,6 @@ defmodule TetoBot.Interactions do
         ephemeral: true
       )
     end
-  end
-
-  defp get_channel_id_from_options(options) do
-    Enum.find(options, fn opt -> opt.name == "channel" end).value
   end
 
   defp format_time_left(seconds) do

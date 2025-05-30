@@ -1,6 +1,6 @@
 import Config
 
-config :logger, :console, metadata: [:shard, :guild, :channel, :bot]
+config :logger, :console, metadata: [:shard, :guild, :channel, :bot, :module]
 
 config :teto_bot,
   redis_url: System.get_env("REDIS_URL", "redis://:dev_password@localhost:6379"),
