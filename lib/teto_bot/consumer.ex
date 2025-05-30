@@ -9,6 +9,7 @@ defmodule TetoBot.Consumer do
   alias Nostrum.Api
   alias Nostrum.Bot
 
+  alias Nostrum.Struct.Guild
   alias Nostrum.Struct.Message
   alias Nostrum.Struct.Message.Attachment
   alias Nostrum.Struct.User
@@ -20,8 +21,17 @@ defmodule TetoBot.Consumer do
   alias TetoBot.RateLimiter
 
   def handle_event({:READY, %{guilds: guilds} = _msg, _}) do
-    Logger.debug("Bot is ready, guilds: #{inspect(guilds)}")
     Commands.register_commands(guilds)
+  end
+
+  # Persist guilds here
+  def handle_event({:GUILD_AVAILABLE, %Guild{id: guild_id} = _guild, _ws_state}) do
+    Logger.info("Guild #{guild_id} is now available")
+
+    case TetoBot.Cache.Guild.exists?(guild_id) do
+      {:ok, false} -> TetoBot.Cache.Guild.add_id(guild_id)
+      _ -> :ok
+    end
   end
 
   def handle_event({:INTERACTION_CREATE, interaction, ws_state}) do
@@ -51,7 +61,6 @@ defmodule TetoBot.Consumer do
   # Ignore any other events
   def handle_event(_), do: :ok
 
-  ## Helpers
   defp handle_msg(
          %Message{
            message_reference: msg_ref,

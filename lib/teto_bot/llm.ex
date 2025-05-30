@@ -29,17 +29,16 @@ defmodule TetoBot.LLM do
     |> OpenaiEx.with_receive_timeout(30_000)
   end
 
-  @spec generate_response!(%OpenaiEx{}, %{
-          messages: list(),
-          guild_id: integer() | nil,
-          user_id: integer() | nil
-        }) :: binary()
+  @spec generate_response!(
+          openai :: %OpenaiEx{},
+          context :: %{
+            messages: list(),
+            guild_id: integer() | nil,
+            user_id: integer() | nil
+          }
+        ) :: binary()
   @doc """
   Generates a response from the LLM using the conversation context.
-
-  ## Parameters
-    - openai: OpenaiEx client
-    - context: List of message strings in chronological order
   """
   def generate_response!(openai, context) do
     messages = Map.get(context, :messages, [])

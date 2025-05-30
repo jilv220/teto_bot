@@ -26,6 +26,12 @@ config :teto_bot,
   llm_top_p: 1,
   llm_top_k: 40
 
+config :teto_bot, TetoBot.Leaderboards.Decay,
+  check_interval: :timer.hours(12),
+  inactivity_threshold: :timer.hours(24 * 3),
+  decay_amount: 4,
+  minimum_intimacy: 5
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 #
