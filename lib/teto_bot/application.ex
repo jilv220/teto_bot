@@ -6,6 +6,7 @@ defmodule TetoBot.Application do
   @impl true
   def start(_type, _args) do
     TetoBot.Release.migrate()
+    Oban.Telemetry.attach_default_logger()
 
     bot_options = %{
       consumer: TetoBot.Consumer,
@@ -21,10 +22,10 @@ defmodule TetoBot.Application do
     children = [
       {Redix, redis_options},
       TetoBot.Repo,
+      {Oban, Application.fetch_env!(:teto_bot, Oban)},
       TetoBot.RateLimiter,
       TetoBot.Guilds.Cache,
       TetoBot.Channels.Cache,
-      TetoBot.Leaderboards.Sync,
       TetoBot.Intimacy.Decay,
       {Nostrum.Bot, bot_options}
     ]

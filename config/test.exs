@@ -1,5 +1,6 @@
 import Config
 
+config :teto_bot, Oban, testing: :manual
 config :logger, :console, metadata: [:shard, :guild, :channel, :bot]
 
 config :teto_bot, TetoBot.Repo,

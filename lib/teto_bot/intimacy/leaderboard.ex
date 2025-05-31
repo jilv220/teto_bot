@@ -1,4 +1,4 @@
-defmodule TetoBot.Leaderboards.Leaderboard do
+defmodule TetoBot.Intimacy.Leaderboard do
   use Ecto.Schema
   import Ecto.Changeset
 

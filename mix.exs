@@ -8,6 +8,7 @@ defmodule TetoBot.MixProject do
       elixir: "~> 1.17",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
+      consolidate_protocols: Mix.env() != :dev,
       deps: deps()
     ]
   end
@@ -34,6 +35,7 @@ defmodule TetoBot.MixProject do
       {:redix, "~> 1.1"},
       {:castore, ">= 0.0.0"},
       {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
+      {:oban, "~> 2.0"},
       {:ex_machina, "~> 2.7", only: :test},
       {:mox, "~> 1.1", only: :test}
     ]
