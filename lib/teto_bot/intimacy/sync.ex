@@ -2,6 +2,7 @@ defmodule TetoBot.Leaderboards.Sync do
   use GenServer
   require Logger
 
+  alias TetoBot.Guilds
   alias TetoBot.Leaderboards.Leaderboard
 
   def start_link(_opts) do
@@ -29,15 +30,7 @@ defmodule TetoBot.Leaderboards.Sync do
     Logger.info("Syncing leaderboards to Postgres")
 
     try do
-      guild_ids =
-        case TetoBot.Cache.Guild.ids() do
-          {:ok, guild_ids} ->
-            guild_ids
-
-          {:error, reason} ->
-            Logger.error("Failed to get guild ids for sync to postgres: #{inspect(reason)}")
-            []
-        end
+      guild_ids = Guilds.ids()
 
       for guild_id_str <- guild_ids do
         updated_users_key = "updated_users:#{guild_id_str}"

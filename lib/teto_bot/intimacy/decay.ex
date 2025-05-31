@@ -11,6 +11,7 @@ defmodule TetoBot.Intimacy.Decay do
         decay_amount: 5,
         minimum_intimacy: 5
   """
+  alias TetoBot.Guilds
 
   use GenServer
   require Logger
@@ -59,7 +60,7 @@ defmodule TetoBot.Intimacy.Decay do
 
   @impl true
   def init(_opts) do
-    config = Application.get_env(:teto_bot, TetoBot.Leaderboards.Decay, [])
+    config = Application.get_env(:teto_bot, TetoBot.Intimacy.Decay, [])
 
     config = %{
       check_interval: Keyword.get(config, :check_interval, @default_check_interval),
@@ -128,14 +129,9 @@ defmodule TetoBot.Intimacy.Decay do
   defp perform_decay_check(config) do
     Logger.info("Starting intimacy decay check")
 
-    case TetoBot.Cache.Guild.ids() do
-      {:ok, guild_ids} ->
-        Enum.each(guild_ids, &process_guild_decay(&1, config))
-        Logger.info("Completed decay check for #{length(guild_ids)} guilds")
-
-      {:error, reason} ->
-        Logger.error("Failed to get guild ids for decay check: #{inspect(reason)}")
-    end
+    guild_ids = Guilds.ids()
+    Enum.each(guild_ids, &process_guild_decay(&1, config))
+    Logger.info("Completed decay check for #{length(guild_ids)} guilds")
   end
 
   defp process_guild_decay(guild_id, config) do

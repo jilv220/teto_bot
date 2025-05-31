@@ -22,12 +22,17 @@ defmodule TetoBot.Application do
       {Redix, redis_options},
       TetoBot.Repo,
       TetoBot.RateLimiter,
+      TetoBot.Guilds.Cache,
       TetoBot.Channels.Cache,
       TetoBot.Leaderboards.Sync,
       TetoBot.Intimacy.Decay,
       {Nostrum.Bot, bot_options}
     ]
 
-    Supervisor.start_link(children, strategy: :one_for_one)
+    result = Supervisor.start_link(children, strategy: :one_for_one)
+
+    # Warm Cache
+    Task.start(fn -> TetoBot.Guilds.warm_cache() end)
+    result
   end
 end

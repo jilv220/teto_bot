@@ -3,6 +3,7 @@ defmodule TetoBot.Consumer do
 
   require Logger
 
+  alias TetoBot.Guilds
   alias Nostrum.Api
   alias Nostrum.Struct.Guild
 
@@ -16,9 +17,9 @@ defmodule TetoBot.Consumer do
   end
 
   def handle_event({:GUILD_CREATE, %Guild{id: new_guild_id} = _new_guild, _}) do
-    case TetoBot.Cache.Guild.exists?(new_guild_id) do
-      {:ok, false} ->
-        TetoBot.Cache.Guild.add_id(new_guild_id)
+    case Guilds.member?(new_guild_id) do
+      false ->
+        Guilds.guild_create(new_guild_id)
         Logger.info("New guild #{new_guild_id} joined!")
 
       _ ->
@@ -27,9 +28,9 @@ defmodule TetoBot.Consumer do
   end
 
   def handle_event({:GUILD_DELETE, {%Guild{id: old_guild_id}, _}, _}) do
-    case TetoBot.Cache.Guild.exists?(old_guild_id) do
-      {:ok, true} ->
-        TetoBot.Cache.Guild.remove_id(old_guild_id)
+    case Guilds.member?(old_guild_id) do
+      true ->
+        Guilds.guild_delete(old_guild_id)
         Logger.info("Guild #{old_guild_id} has left us!")
 
       _ ->

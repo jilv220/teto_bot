@@ -21,6 +21,7 @@ defmodule TetoBot.RateLimiter do
   """
 
   use GenServer
+
   require Nostrum.Snowflake
   require Logger
   alias Nostrum.Snowflake

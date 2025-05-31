@@ -3,6 +3,7 @@ defmodule TetoBot.Guilds do
 
   alias Nostrum.Snowflake
   alias TetoBot.Guilds.Guild
+  alias TetoBot.Guilds.Cache
 
   @repo Application.compile_env(:teto_bot, :repo, TetoBot.Repo)
 
@@ -10,15 +11,22 @@ defmodule TetoBot.Guilds do
           {:ok, Ecto.Schema.t()} | {:error, Ecto.Changeset.t()} | {:error, :invalid_id}
   @doc """
   A guild added our app
-  Insert a new guild record `guilds` table
+  Insert a new guild record `guilds` table and add to cache
   """
   def guild_create(guild_id) when Snowflake.is_snowflake(guild_id) do
-    %Guild{}
-    |> Guild.changeset(%{guild_id: guild_id})
-    |> @repo.insert([])
+    case %Guild{}
+         |> Guild.changeset(%{guild_id: guild_id})
+         |> @repo.insert([]) do
+      {:ok, _guild} = result ->
+        Cache.add(guild_id)
+        result
+
+      error ->
+        error
+    end
   end
 
-  def guild_create(_), do: :invalid_id
+  def guild_create(_), do: {:error, :invalid_id}
 
   @spec guild_delete(Snowflake.t()) ::
           {:ok, Ecto.Schema.t()}
@@ -27,7 +35,7 @@ defmodule TetoBot.Guilds do
           | {:error, :invalid_id}
   @doc """
   A guild removed our app
-  Remove the record from `guilds` table
+  Remove the record from `guilds` table and cache
   """
   def guild_delete(guild_id) when Snowflake.is_snowflake(guild_id) do
     case @repo.get_by(Guild, [guild_id: guild_id], []) do
@@ -35,9 +43,68 @@ defmodule TetoBot.Guilds do
         {:error, :not_found}
 
       guild ->
-        @repo.delete(guild, [])
+        case @repo.delete(guild, []) do
+          {:ok, _guild} = result ->
+            Cache.remove(guild_id)
+            result
+
+          error ->
+            error
+        end
     end
   end
 
-  def guild_delete(_), do: :invalid_id
+  def guild_delete(_), do: {:error, :invalid_id}
+
+  @doc """
+  Check if guild is a member (first check cache, then database if not found)
+  """
+  def member?(guild_id) when Snowflake.is_snowflake(guild_id) do
+    # Fast cache lookup first
+    if Cache.exists?(guild_id) do
+      true
+    else
+      # Fallback to database lookup
+      case @repo.get_by(Guild, [guild_id: guild_id], []) do
+        nil ->
+          false
+
+        _guild ->
+          # Add to cache for future fast lookups
+          Cache.add(guild_id)
+          true
+      end
+    end
+  end
+
+  def member?(_), do: false
+
+  @spec ids() :: [Snowflake.t()]
+  @doc """
+  Get all guild IDs from the database
+  Returns a list of guild IDs (Snowflakes)
+  """
+  def ids do
+    @repo.all(Guild, [])
+    |> Enum.map(& &1.guild_id)
+  end
+
+  @doc """
+  Get cache statistics
+  """
+  def cache_stats() do
+    %{
+      cached_guilds: Cache.count(),
+      cached_guild_ids: Cache.list()
+    }
+  end
+
+  @doc """
+  Load all guild IDs from database into cache
+  Useful for cache warming on application startup
+  """
+  def warm_cache do
+    ids()
+    |> Enum.each(&Cache.add/1)
+  end
 end

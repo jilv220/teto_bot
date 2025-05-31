@@ -146,5 +146,7 @@ defmodule TetoBot.Messages do
     Api.Message.create(channel_id,
       content: "You're sending messages too quickly! Please wait a moment."
     )
+
+    :ok
   end
 end

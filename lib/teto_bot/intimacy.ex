@@ -17,7 +17,7 @@ defmodule TetoBot.Intimacy do
   The feed cooldown duration can be configured in your application config:
 
       config :teto_bot, TetoBot.Intimacy,
-        feed_cooldown_duration: 24 * 60 * 60  # 24 hours in seconds
+        feed_cooldown_duration: :timer.hours(24)
 
   ## Redis Keys
   - `leaderboard:<guild_id>`: Sorted set storing user IDs and their intimacy scores.
