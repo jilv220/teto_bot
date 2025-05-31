@@ -13,7 +13,7 @@ defmodule TetoBot.Messages do
   alias Nostrum.Cache.MessageCache
   alias Nostrum.Struct
 
-  alias TetoBot.Leaderboards
+  alias TetoBot.Intimacy
   alias TetoBot.LLM
   alias TetoBot.RateLimiter
 
@@ -134,7 +134,7 @@ defmodule TetoBot.Messages do
         message_reference: %{message_id: message_id}
       )
 
-    Leaderboards.increment_intimacy!(guild_id, user_id, 1)
+    Intimacy.increment!(guild_id, user_id, 1)
 
     :ok
   end

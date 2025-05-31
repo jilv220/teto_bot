@@ -7,7 +7,7 @@ defmodule TetoBot.Interactions do
 
   alias TetoBot.Interactions.Teto
   alias Nostrum.Struct.User
-  alias TetoBot.Leaderboards
+  alias TetoBot.Intimacy
   alias Nostrum.Api
   alias Nostrum.Api.Guild
   alias Nostrum.Struct.Interaction
@@ -98,10 +98,10 @@ defmodule TetoBot.Interactions do
 
   defp handle_feed(interaction, user_id, guild_id, channel_id) do
     with_whitelisted_channel(interaction, channel_id, fn ->
-      with {:ok, :allowed} <- Leaderboards.check_feed_cooldown(guild_id, user_id) do
-        Leaderboards.set_feed_cooldown!(guild_id, user_id)
-        Leaderboards.increment_intimacy!(guild_id, user_id, 5)
-        {:ok, intimacy} = Leaderboards.get_intimacy(guild_id, user_id)
+      with {:ok, :allowed} <- Intimacy.check_feed_cooldown(guild_id, user_id) do
+        Intimacy.set_feed_cooldown!(guild_id, user_id)
+        Intimacy.increment!(guild_id, user_id, 5)
+        {:ok, intimacy} = Intimacy.get(guild_id, user_id)
 
         create_response(
           interaction,

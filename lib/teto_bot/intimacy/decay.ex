@@ -1,4 +1,4 @@
-defmodule TetoBot.Leaderboards.Decay do
+defmodule TetoBot.Intimacy.Decay do
   @moduledoc """
   A GenServer that periodically decays intimacy scores for users who haven't
   interacted with the bot (via chat or /feed) for a specified period.

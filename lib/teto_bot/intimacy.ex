@@ -1,6 +1,6 @@
-defmodule TetoBot.Leaderboards do
+defmodule TetoBot.Intimacy do
   @moduledoc """
-  Manages leaderboard operations for a Discord bot, handling user intimacy scores,
+  Manages Intimacy for the bot, handling user intimacy scores,
   cooldowns for commands, and last interaction timestamps using Redis for persistence.
 
   This module provides functionality to:
@@ -11,6 +11,13 @@ defmodule TetoBot.Leaderboards do
   All operations interact with Redis using the `Redix` client, and errors are handled
   according to Elixir's "let it crash" philosophy, with appropriate error logging and
   user-friendly responses.
+
+  ## Configuration
+
+  The feed cooldown duration can be configured in your application config:
+
+      config :teto_bot, TetoBot.Intimacy,
+        feed_cooldown_duration: 24 * 60 * 60  # 24 hours in seconds
 
   ## Redis Keys
   - `leaderboard:<guild_id>`: Sorted set storing user IDs and their intimacy scores.
@@ -23,11 +30,17 @@ defmodule TetoBot.Leaderboards do
   - `Logger` for error logging.
   """
 
-  @feed_cooldown_duration 24 * 60 * 60
-
   require Logger
 
-  @spec get_intimacy(integer(), integer()) ::
+  @default_feed_cooldown_duration :timer.hours(24)
+
+  defp feed_cooldown_duration do
+    Application.get_env(:teto_bot, __MODULE__, [])
+    |> Keyword.get(:feed_cooldown_duration, @default_feed_cooldown_duration)
+    |> div(1000)
+  end
+
+  @spec get(integer(), integer()) ::
           {:ok, integer()} | {:error, Redix.ConnectionError.t()} | {:error, Redix.Error.t()}
   @doc """
   Retrieves a user's intimacy score from a guild's leaderboard.
@@ -35,13 +48,13 @@ defmodule TetoBot.Leaderboards do
   Logs Redis errors if they occur.
 
   ## Examples
-      iex> TetoBot.Leaderboards.get_intimacy(12345, 67890)
+      iex> TetoBot.Intimacy.get(12345, 67890)
       {:ok, 100}
 
-      iex> TetoBot.Leaderboards.get_intimacy(12345, 99999)
+      iex> TetoBot.Intimacy.get(12345, 99999)
       {:ok, 0}
   """
-  def get_intimacy(guild_id, user_id) do
+  def get(guild_id, user_id) do
     user_id_str = Integer.to_string(user_id)
     guild_id_str = Integer.to_string(guild_id)
     leaderboard_key = "leaderboard:#{guild_id_str}"
@@ -62,7 +75,7 @@ defmodule TetoBot.Leaderboards do
     end
   end
 
-  @spec increment_intimacy!(integer(), integer(), integer()) :: :ok
+  @spec increment!(integer(), integer(), integer()) :: :ok
   @doc """
   Increments a user's intimacy score in a guild's leaderboard and marks them for syncing.
   Performs an atomic operation to update the leaderboard, mark the user for syncing, and
@@ -70,13 +83,13 @@ defmodule TetoBot.Leaderboards do
 
   ## Side Effects
   - Updates the `last_interaction:<guild_id>:<user_id>` key with the current timestamp,
-    used by `TetoBot.Leaderboards.Decay` to track user activity.
+    used by `TetoBot.Intimacy.Decay` to track user activity.
 
   ## Examples
-      iex> TetoBot.Leaderboards.increment_intimacy!(12345, 67890, 10)
+      iex> TetoBot.Intimacy.increment!(12345, 67890, 10)
       :ok
   """
-  def increment_intimacy!(guild_id, user_id, increment) do
+  def increment!(guild_id, user_id, increment) do
     user_id_str = Integer.to_string(user_id)
     guild_id_str = Integer.to_string(guild_id)
     leaderboard_key = "leaderboard:#{guild_id_str}"
@@ -94,25 +107,27 @@ defmodule TetoBot.Leaderboards do
   @spec check_feed_cooldown(integer(), integer()) ::
           {:ok, :allowed} | {:error, integer()} | {:error, atom()}
   @doc """
-  Checks if a user can use the `/feed` command in a guild and sets a 24-hour cooldown if allowed.
+  Checks if a user can use the `/feed` command in a guild and sets a cooldown if allowed.
+  The cooldown duration is configurable (defaults to 24 hours).
   Updates the user's last interaction timestamp when the command is permitted.
 
   ## Side Effects
-  - Sets the `feed_cooldown:<guild_id>:<user_id>` key with a 24-hour expiration when allowed.
+  - Sets the `feed_cooldown:<guild_id>:<user_id>` key with an expiration when allowed.
   - Updates the `last_interaction:<guild_id>:<user_id>` key with the current timestamp,
-    used by `TetoBot.Leaderboards.Decay` to track user activity.
+    used by `TetoBot.Intimacy.Decay` to track user activity.
 
   ## Examples
-      iex> TetoBot.Leaderboards.check_feed_cooldown!(12345, 67890)
+      iex> TetoBot.Intimacy.check_feed_cooldown(12345, 67890)
       {:ok, :allowed}
 
-      iex> TetoBot.Leaderboards.check_feed_cooldown!(12345, 67890)
+      iex> TetoBot.Intimacy.check_feed_cooldown(12345, 67890)
       {:error, 86300}
   """
   def check_feed_cooldown(guild_id, user_id) do
     user_id_str = Integer.to_string(user_id)
     guild_id_str = Integer.to_string(guild_id)
     cooldown_key = "feed_cooldown:#{guild_id_str}:#{user_id_str}"
+    cooldown_duration = feed_cooldown_duration()
 
     case Redix.command(:redix, ["GET", cooldown_key]) do
       {:ok, nil} ->
@@ -124,10 +139,10 @@ defmodule TetoBot.Leaderboards do
             now = System.system_time(:second)
             time_since = now - timestamp
 
-            if time_since >= @feed_cooldown_duration do
+            if time_since >= cooldown_duration do
               {:ok, :allowed}
             else
-              time_left = @feed_cooldown_duration - time_since
+              time_left = cooldown_duration - time_since
               {:error, time_left}
             end
 
@@ -140,15 +155,27 @@ defmodule TetoBot.Leaderboards do
     end
   end
 
+  @spec set_feed_cooldown!(integer(), integer()) :: :ok
+  @doc """
+  Sets the feed cooldown for a user in a guild.
+  The cooldown duration is configurable (defaults to 24 hours).
+
+  ## Examples
+      iex> TetoBot.Intimacy.set_feed_cooldown!(12345, 67890)
+      :ok
+  """
   def set_feed_cooldown!(guild_id, user_id) do
     user_id_str = Integer.to_string(user_id)
     guild_id_str = Integer.to_string(guild_id)
     cooldown_key = "feed_cooldown:#{guild_id_str}:#{user_id_str}"
+    cooldown_duration = feed_cooldown_duration()
 
     Redix.pipeline!(:redix, [
       ["SET", cooldown_key, System.system_time(:second)],
-      ["EXPIRE", cooldown_key, @feed_cooldown_duration]
+      ["EXPIRE", cooldown_key, cooldown_duration]
     ])
+
+    :ok
   end
 
   @spec update_last_interaction(integer(), integer()) ::
@@ -162,7 +189,7 @@ defmodule TetoBot.Leaderboards do
   - Logs an error if the Redis operation fails.
 
   ## Examples
-      iex> TetoBot.Leaderboards.update_last_interaction(12345, 67890)
+      iex> TetoBot.Intimacy.update_last_interaction(12345, 67890)
       :ok
   """
   def update_last_interaction(guild_id, user_id) do
@@ -187,7 +214,7 @@ defmodule TetoBot.Leaderboards do
   Used internally for atomic pipeline operations.
 
   ## Examples
-      iex> TetoBot.Leaderboards.get_interaction_update_command(12345, 67890)
+      iex> TetoBot.Intimacy.get_interaction_update_command(12345, 67890)
       ["SET", "last_interaction:12345:67890", "16970512340000"]
   """
   def get_interaction_update_command(guild_id, user_id) do
@@ -197,5 +224,55 @@ defmodule TetoBot.Leaderboards do
     timestamp = System.system_time(:millisecond)
 
     ["SET", interaction_key, timestamp]
+  end
+
+  @spec get_tier(integer()) :: String.t()
+  @doc """
+  Returns the intimacy tier name for a given intimacy score.
+
+  ## Examples
+      iex> TetoBot.Intimacy.get_tier(75)
+      "Friend"
+
+      iex> TetoBot.Intimacy.get_tier(5)
+      "Stranger"
+  """
+  def get_tier(intimacy) do
+    intimacy_list = [{101, "Close Friend"}, {51, "Friend"}, {11, "Acquaintance"}, {0, "Stranger"}]
+
+    {_, intimacy_tier} =
+      intimacy_list
+      |> Enum.find(fn {k, _v} -> intimacy >= k end)
+
+    intimacy_tier
+  end
+
+  @spec get_tier_info(integer()) :: {{integer(), binary()}, {integer(), binary()}}
+  @doc """
+  Returns current tier information and next tier information for a given intimacy score.
+
+  ## Examples
+      iex> TetoBot.Intimacy.get_tier_info(25)
+      {{25, "Acquaintance"}, {51, "Friend"}}
+  """
+  def get_tier_info(intimacy) do
+    intimacy_list = [{101, "Close Friend"}, {51, "Friend"}, {11, "Acquaintance"}, {0, "Stranger"}]
+
+    curr_intimacy_idx =
+      intimacy_list
+      |> Enum.find_index(fn {k, _v} -> intimacy >= k end)
+
+    {_, curr_intimacy_tier} =
+      intimacy_list
+      |> Enum.at(curr_intimacy_idx)
+
+    next_tier_intimacy_idx = curr_intimacy_idx - 1
+
+    # default to highest tier if out of bound
+    next_tier_intimacy_entry =
+      intimacy_list
+      |> Enum.at(next_tier_intimacy_idx, Enum.at(intimacy_list, 0))
+
+    {{intimacy, curr_intimacy_tier}, next_tier_intimacy_entry}
   end
 end

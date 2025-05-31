@@ -24,7 +24,7 @@ defmodule TetoBot.Application do
       TetoBot.RateLimiter,
       TetoBot.Channels.Cache,
       TetoBot.Leaderboards.Sync,
-      TetoBot.Leaderboards.Decay,
+      TetoBot.Intimacy.Decay,
       {Nostrum.Bot, bot_options}
     ]
 

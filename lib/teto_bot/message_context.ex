@@ -27,6 +27,11 @@ defmodule TetoBot.MessageContext do
     MessageCache.Mnesia.get_by_channel(channel_id, after_timestamp, :infinity)
     # Filter out empty messages
     |> Enum.filter(&(&1.content != ""))
+    # Reject messages from /feed
+    |> Enum.reject(
+      &(&1.content
+        |> String.contains?("You fed Teto! Your intimacy with her increased"))
+    )
     |> Enum.map(fn %Message{content: content, author: author, timestamp: timestamp} ->
       role = if author.id == Bot.get_bot_name(), do: :assistant, else: :user
       username = if role == :assistant, do: "Bot", else: author.username

@@ -10,6 +10,7 @@ defmodule TetoBot.LLM do
 
   require Logger
 
+  alias TetoBot.Intimacy
   alias OpenaiEx.MsgContent
   alias OpenaiEx.Chat
   alias OpenaiEx.ChatMessage
@@ -46,7 +47,7 @@ defmodule TetoBot.LLM do
     user_id = Map.get(context, :user_id)
 
     intimacy = fetch_intimacy(guild_id, user_id)
-    tier = get_intimacy_tier(intimacy)
+    tier = Intimacy.get_tier(intimacy)
 
     {:ok, sys_prompt} = LLM.Context.get_system_prompt()
 
@@ -147,42 +148,10 @@ defmodule TetoBot.LLM do
     end
   end
 
-  def get_intimacy_tier(intimacy) do
-    intimacy_list = [{101, "Close Friend"}, {51, "Friend"}, {11, "Acquaintance"}, {0, "Stranger"}]
-
-    {_, intimacy_tier} =
-      intimacy_list
-      |> Enum.find(fn {k, _v} -> intimacy >= k end)
-
-    intimacy_tier
-  end
-
-  @spec get_intimacy_info(integer()) :: {{integer(), binary()}, {integer(), binary()}}
-  def get_intimacy_info(intimacy) do
-    intimacy_list = [{101, "Close Friend"}, {51, "Friend"}, {11, "Acquaintance"}, {0, "Stranger"}]
-
-    curr_intimacy_idx =
-      intimacy_list
-      |> Enum.find_index(fn {k, _v} -> intimacy >= k end)
-
-    {_, curr_intimacy_tier} =
-      intimacy_list
-      |> Enum.at(curr_intimacy_idx)
-
-    next_tier_intimacy_idx = curr_intimacy_idx - 1
-
-    # default to highest tier if out of bound
-    next_tier_intimacy_entry =
-      intimacy_list
-      |> Enum.at(next_tier_intimacy_idx, Enum.at(intimacy_list, 0))
-
-    {{intimacy, curr_intimacy_tier}, next_tier_intimacy_entry}
-  end
-
   ## Private
   defp fetch_intimacy(guild_id, user_id) do
     if guild_id && user_id do
-      case TetoBot.Leaderboards.get_intimacy(guild_id, user_id) do
+      case TetoBot.Intimacy.get(guild_id, user_id) do
         {:ok, score} -> score
         {:error, _} -> 0
       end
