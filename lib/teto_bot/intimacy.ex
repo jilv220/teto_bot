@@ -101,7 +101,9 @@ defmodule TetoBot.Intimacy do
       ["SADD", updated_users_key, user_id_str]
     ])
 
-    Users.update_last_interaction!(user_id)
+
+    Users.update_last_interaction!(guild_id, user_id)
+
 
     :ok
   end
