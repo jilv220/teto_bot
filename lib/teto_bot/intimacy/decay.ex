@@ -40,17 +40,22 @@ defmodule TetoBot.Intimacy.Decay do
   environment when it performs a job. Runtime configuration updates are not supported
   through this module; changes require a deployment or application restart.
   """
+
+  require Logger
+  import Ecto.Query
+
+  alias TetoBot.Intimacy
   alias TetoBot.Users
   alias TetoBot.Guilds
   alias Oban
-  alias TetoBot.Repo
-  alias TetoBot.Users.UserGuild # For Ecto updates
 
-  require Logger
+  alias TetoBot.Repo
+  alias TetoBot.Users.UserGuild
 
   # Default configuration values.
   # These are used by get_config/0 if specific settings are not found in the application environment.
-  @default_inactivity_threshold :timer.hours(24 * 3) # 3 days
+  # 3 days
+  @default_inactivity_threshold :timer.hours(24 * 3)
   @default_decay_amount 5
   @default_minimum_intimacy 5
   # @default_check_interval is removed as it's not relevant for the worker's config.
@@ -62,7 +67,8 @@ defmodule TetoBot.Intimacy.Decay do
   environment at the time of its execution.
   """
   def trigger_decay do
-    %TetoBot.Intimacy.DecayWorker{}
+    %{}
+    |> Intimacy.DecayWorker.new()
     |> Oban.insert()
   end
 
@@ -166,39 +172,55 @@ defmodule TetoBot.Intimacy.Decay do
               )
 
             # Update the UserGuild record in Postgres.
-            case Repo.update_all(query, set: [intimacy: new_intimacy, updated_at: DateTime.utc_now()]) do
+            case Repo.update_all(query,
+                   set: [intimacy: new_intimacy, updated_at: DateTime.utc_now()]
+                 ) do
               {1, _} ->
                 Logger.info(
                   "Ecto: Decayed intimacy for user #{user_id} in guild #{guild_id} from #{current_intimacy} to #{new_intimacy}."
                 )
-                true # Count this update
+
+                # Count this update
+                true
+
               {0, _} ->
-                Logger.warn(
+                Logger.warning(
                   "Ecto: Failed to find UserGuild record for user #{user_id} in guild #{guild_id} during decay."
                 )
-                false # Not updated
+
+                # Not updated
+                false
+
               {:error, reason} ->
                 Logger.error(
                   "Ecto: Failed to decay intimacy for user #{user_id} in guild #{guild_id}. Reason: #{inspect(reason)}"
                 )
-                false # Not updated
+
+                # Not updated
+                false
             end
           else
-            false # Intimacy score did not change, no update needed.
+            # Intimacy score did not change, no update needed.
+            false
           end
         end)
 
       if updates_count > 0 do
-        Logger.info("Ecto: Successfully updated intimacy for #{updates_count} users in guild #{guild_id}.")
+        Logger.info(
+          "Ecto: Successfully updated intimacy for #{updates_count} users in guild #{guild_id}."
+        )
       else
-        Logger.info("Ecto: No users required intimacy updates in guild #{guild_id} after filtering.")
+        Logger.info(
+          "Ecto: No users required intimacy updates in guild #{guild_id} after filtering."
+        )
       end
+
       :ok
     end
   end
 
-  defp validate_positive_integer(value, _key) when is_integer(value) and value > 0, do: :ok
+  def validate_positive_integer(value, _key) when is_integer(value) and value > 0, do: :ok
 
-  defp validate_positive_integer(value, key),
+  def validate_positive_integer(value, key),
     do: {:error, "Invalid #{key}: must be a positive integer, got #{inspect(value)}"}
 end

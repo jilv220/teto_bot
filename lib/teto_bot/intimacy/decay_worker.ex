@@ -15,11 +15,7 @@ defmodule TetoBot.Intimacy.DecayWorker do
 
   require Logger
 
-  alias TetoBot.Intimacy.Decay
-  alias TetoBot.Application # To get config
-
-  # Default configuration, similar to the GenServer version
-  @default_check_interval :timer.hours(12) # Not used for scheduling here, but for reference
+  # Default configuration
   @default_inactivity_threshold :timer.hours(24 * 3)
   @default_decay_amount 5
   @default_minimum_intimacy 5
@@ -60,13 +56,11 @@ defmodule TetoBot.Intimacy.DecayWorker do
         inactivity_threshold: inactivity_threshold,
         decay_amount: decay_amount,
         minimum_intimacy: minimum_intimacy
-        # check_interval is handled by Oban's cron scheduling, so not directly used by the worker logic itself
       }
 
       {:ok, config_map}
     else
       {:error, reason} -> {:error, reason}
-      error -> {:error, "Unknown validation error: #{inspect(error)}"} # Catch any other error
     end
   end
 end
