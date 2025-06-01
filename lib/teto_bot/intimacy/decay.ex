@@ -11,6 +11,7 @@ defmodule TetoBot.Intimacy.Decay do
         decay_amount: 5,
         minimum_intimacy: 5
   """
+  alias TetoBot.Users
   alias TetoBot.Guilds
 
   use GenServer
@@ -139,7 +140,9 @@ defmodule TetoBot.Intimacy.Decay do
 
     case get_guild_members(leaderboard_key) do
       {:ok, members} ->
-        inactive_members = filter_inactive_members(guild_id, members, config)
+        inspect(members)
+
+        inactive_members = filter_inactive_members(members, config)
         apply_decay_to_members(guild_id, inactive_members, config)
 
         if length(inactive_members) > 0 do
@@ -174,36 +177,22 @@ defmodule TetoBot.Intimacy.Decay do
     end
   end
 
-  defp filter_inactive_members(guild_id, members, config) do
+  defp filter_inactive_members(members, config) do
     current_time = System.system_time(:millisecond)
     threshold = current_time - config.inactivity_threshold
 
     Enum.filter(members, fn {user_id, intimacy} ->
-      intimacy >= config.minimum_intimacy && user_inactive?(guild_id, user_id, threshold)
+      intimacy >= config.minimum_intimacy && user_inactive?(user_id, threshold)
     end)
   end
 
-  defp user_inactive?(guild_id, user_id, threshold) do
-    interaction_key = "last_interaction:#{guild_id}:#{user_id}"
-
-    case Redix.command(:redix, ["GET", interaction_key]) do
-      {:ok, nil} ->
-        # No interaction means inactive if they have a score
+  defp user_inactive?(user_id, threshold) do
+    case Users.get_last_interaction(user_id) do
+      {:error, :not_found} ->
         true
 
-      {:ok, timestamp_str} ->
-        case Integer.parse(timestamp_str) do
-          {timestamp_millis, _} ->
-            timestamp_millis < threshold
-
-          :error ->
-            # Invalid timestamp treated as inactive
-            true
-        end
-
-      {:error, _reason} ->
-        # Don't decay on Redis error
-        false
+      {:ok, date_time} ->
+        DateTime.to_unix(date_time, :millisecond) < threshold
     end
   end
 
