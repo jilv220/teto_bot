@@ -17,7 +17,7 @@ defmodule TetoBot.Users.User do
 
   def changeset(user, attrs) do
     user
-    |> cast(attrs, [:user_id, :last_interaction, :last_feed, :intimacy])
+    |> cast(attrs, [:user_id, :last_interaction, :last_feed])
     |> validate_required([:user_id])
     |> unique_constraint(:user_id, name: :users_pkey)
   end
