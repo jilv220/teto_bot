@@ -6,7 +6,6 @@ defmodule TetoBot.Users.User do
   schema "users" do
     field(:last_interaction, :utc_datetime)
     field(:last_feed, :utc_datetime)
-    field(:intimacy, :integer, default: 0)
 
     many_to_many(:guilds, TetoBot.Guilds.Guild,
       join_through: "user_guilds",

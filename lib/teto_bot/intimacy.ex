@@ -29,24 +29,20 @@ defmodule TetoBot.Intimacy do
   - `Redix` for Redis operations.
   - `Logger` for error logging.
   """
+  import Ecto.Query
+
+  alias TetoBot.Repo
+  alias TetoBot.Users.UserGuild
   alias TetoBot.Users
 
   require Logger
 
-  @default_feed_cooldown_duration :timer.hours(24)
-
-  defp feed_cooldown_duration do
-    Application.get_env(:teto_bot, __MODULE__, [])
-    |> Keyword.get(:feed_cooldown_duration, @default_feed_cooldown_duration)
-    |> div(1000)
-  end
-
   @spec get(integer(), integer()) ::
-          {:ok, integer()} | {:error, Redix.ConnectionError.t()} | {:error, Redix.Error.t()}
+          {:ok, integer()} | {:error, term()}
   @doc """
   Retrieves a user's intimacy score from a guild's leaderboard.
   Returns 0 if the user is not on the leaderboard.
-  Logs Redis errors if they occur.
+  Logs database errors if they occur.
 
   ## Examples
       iex> TetoBot.Intimacy.get(12345, 67890)
@@ -56,128 +52,86 @@ defmodule TetoBot.Intimacy do
       {:ok, 0}
   """
   def get(guild_id, user_id) do
-    user_id_str = Integer.to_string(user_id)
-    guild_id_str = Integer.to_string(guild_id)
-    leaderboard_key = "leaderboard:#{guild_id_str}"
+    try do
+      case Repo.get_by(UserGuild, guild_id: guild_id, user_id: user_id) do
+        nil ->
+          {:ok, 0}
 
-    case Redix.command(:redix, ["ZSCORE", leaderboard_key, user_id_str]) do
-      {:ok, nil} ->
-        {:ok, 0}
+        %UserGuild{intimacy: score} ->
+          {:ok, score}
+      end
+    rescue
+      error ->
+        Logger.error(
+          "Failed to get intimacy score for guild #{guild_id}, user #{user_id}: #{inspect(error)}"
+        )
 
-      {:ok, score_str} ->
-        # ZSCORE returns a string float.
-        case Float.parse(score_str) do
-          {score, _} -> {:ok, trunc(score)}
-          :error -> {:error, :invalid_score}
-        end
-
-      {:error, reason} ->
-        {:error, reason}
+        {:error, error}
     end
   end
 
-  @spec increment!(integer(), integer(), integer()) :: :ok
+  @spec increment(integer(), integer(), integer()) :: :ok
   @doc """
-  Increments a user's intimacy score in a guild's leaderboard and marks them for syncing.
-  Performs an atomic operation to update the leaderboard, mark the user for syncing, and
-  record their last interaction timestamp.
+  Increments a user's intimacy score in a guild's leaderboard.
+  Performs an atomic operation to update the intimacy score and record the user's last interaction timestamp.
+
+  Creates a new user_guild record if the user doesn't have one for this guild yet.
 
   ## Side Effects
-  - Updates the `last_interaction:<guild_id>:<user_id>` key with the current timestamp,
-    used by `TetoBot.Intimacy.Decay` to track user activity.
+  - Updates the user's last interaction timestamp via `TetoBot.Users.update_last_interaction!/2`
 
   ## Examples
-      iex> TetoBot.Intimacy.increment!(12345, 67890, 10)
+      iex> TetoBot.Intimacy.increment(12345, 67890, 10)
       :ok
   """
-  def increment!(guild_id, user_id, increment) do
-    user_id_str = Integer.to_string(user_id)
-    guild_id_str = Integer.to_string(guild_id)
-    leaderboard_key = "leaderboard:#{guild_id_str}"
-    updated_users_key = "updated_users:#{guild_id_str}"
+  def increment(guild_id, user_id, increment) do
+    case Repo.get_by(UserGuild, guild_id: guild_id, user_id: user_id) do
+      nil ->
+        # This will create the user_guild record with intimacy_score
+        Users.update_last_interaction(guild_id, user_id)
 
-    Redix.pipeline!(:redix, [
-      ["ZINCRBY", leaderboard_key, Integer.to_string(increment), user_id_str],
-      ["SADD", updated_users_key, user_id_str]
-    ])
+        from(ug in UserGuild,
+          where: ug.guild_id == ^guild_id and ug.user_id == ^user_id
+        )
+        |> Repo.update_all(set: [intimacy: increment])
 
-    Users.update_last_interaction!(guild_id, user_id)
+      %UserGuild{intimacy: current_score} ->
+        from(ug in UserGuild,
+          where: ug.guild_id == ^guild_id and ug.user_id == ^user_id
+        )
+        |> Repo.update_all(set: [intimacy: current_score + increment])
+
+        Users.update_last_interaction(guild_id, user_id)
+    end
 
     :ok
   end
 
-  @spec check_feed_cooldown(integer(), integer()) ::
-          {:ok, :allowed} | {:error, integer()} | {:error, atom()}
+  @spec get_leaderboard(integer(), integer()) :: {:ok, list()} | {:error, term()}
   @doc """
-  Checks if a user can use the `/feed` command in a guild and sets a cooldown if allowed.
-  The cooldown duration is configurable (defaults to 24 hours).
-  Updates the user's last interaction timestamp when the command is permitted.
-
-  ## Side Effects
-  - Sets the `feed_cooldown:<guild_id>:<user_id>` key with an expiration when allowed.
-  - Updates the `last_interaction:<guild_id>:<user_id>` key with the current timestamp,
-    used by `TetoBot.Intimacy.Decay` to track user activity.
+  Gets the top N users for a guild's intimacy leaderboard.
 
   ## Examples
-      iex> TetoBot.Intimacy.check_feed_cooldown(12345, 67890)
-      {:ok, :allowed}
-
-      iex> TetoBot.Intimacy.check_feed_cooldown(12345, 67890)
-      {:error, 86300}
+      iex> TetoBot.Intimacy.get_leaderboard(12345, 10)
+      {:ok, [%{user_id: 67890, score: 150}, %{user_id: 11111, score: 100}]}
   """
-  def check_feed_cooldown(guild_id, user_id) do
-    user_id_str = Integer.to_string(user_id)
-    guild_id_str = Integer.to_string(guild_id)
-    cooldown_key = "feed_cooldown:#{guild_id_str}:#{user_id_str}"
-    cooldown_duration = feed_cooldown_duration()
+  def get_leaderboard(guild_id, limit \\ 10) do
+    try do
+      leaderboard =
+        from(ugi in UserGuild,
+          where: ugi.guild_id == ^guild_id,
+          order_by: [desc: ugi.intimacy],
+          limit: ^limit,
+          select: %{user_id: ugi.user_id, intimacy: ugi.intimacy}
+        )
+        |> Repo.all()
 
-    case Redix.command(:redix, ["GET", cooldown_key]) do
-      {:ok, nil} ->
-        {:ok, :allowed}
-
-      {:ok, timestamp_str} ->
-        case Integer.parse(timestamp_str) do
-          {timestamp, _} ->
-            now = System.system_time(:second)
-            time_since = now - timestamp
-
-            if time_since >= cooldown_duration do
-              {:ok, :allowed}
-            else
-              time_left = cooldown_duration - time_since
-              {:error, time_left}
-            end
-
-          :error ->
-            {:error, :invalid_timestamp}
-        end
-
-      {:error, reason} ->
-        {:error, reason}
+      {:ok, leaderboard}
+    rescue
+      error ->
+        Logger.error("Failed to get leaderboard for guild #{guild_id}: #{inspect(error)}")
+        {:error, error}
     end
-  end
-
-  @spec set_feed_cooldown!(integer(), integer()) :: :ok
-  @doc """
-  Sets the feed cooldown for a user in a guild.
-  The cooldown duration is configurable (defaults to 24 hours).
-
-  ## Examples
-      iex> TetoBot.Intimacy.set_feed_cooldown!(12345, 67890)
-      :ok
-  """
-  def set_feed_cooldown!(guild_id, user_id) do
-    user_id_str = Integer.to_string(user_id)
-    guild_id_str = Integer.to_string(guild_id)
-    cooldown_key = "feed_cooldown:#{guild_id_str}:#{user_id_str}"
-    cooldown_duration = feed_cooldown_duration()
-
-    Redix.pipeline!(:redix, [
-      ["SET", cooldown_key, System.system_time(:second)],
-      ["EXPIRE", cooldown_key, cooldown_duration]
-    ])
-
-    :ok
   end
 
   @spec get_tier(integer()) :: String.t()

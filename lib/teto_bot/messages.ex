@@ -134,7 +134,7 @@ defmodule TetoBot.Messages do
         message_reference: %{message_id: message_id}
       )
 
-    Intimacy.increment!(guild_id, user_id, 1)
+    Intimacy.increment(guild_id, user_id, 1)
 
     :ok
   end

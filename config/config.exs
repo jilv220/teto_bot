@@ -9,15 +9,12 @@ config :nostrum,
 config :teto_bot, Oban,
   engine: Oban.Engines.Basic,
   notifier: Oban.Notifiers.Postgres,
-  queues: [default: 10, leaderboard_sync: 1],
+  queues: [default: 10],
   repo: TetoBot.Repo,
   plugins: [
     {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7},
     {Oban.Plugins.Lifeline, rescue_after: :timer.minutes(30)},
-    {Oban.Plugins.Cron,
-     crontab: [
-       {"*/5 * * * *", TetoBot.Intimacy.Leaderboard.SyncWorker}
-     ]}
+    {Oban.Plugins.Cron, crontab: []}
   ]
 
 config :teto_bot,

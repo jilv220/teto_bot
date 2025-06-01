@@ -101,7 +101,7 @@ defmodule TetoBot.Interactions do
     with_whitelisted_channel(interaction, channel_id, fn ->
       with {:ok, :allowed} <- Users.check_feed_cooldown(user_id) do
         Users.set_feed_cooldown(guild_id, user_id)
-        Intimacy.increment!(guild_id, user_id, 5)
+        Intimacy.increment(guild_id, user_id, 5)
         {:ok, intimacy} = Intimacy.get(guild_id, user_id)
 
         create_response(
@@ -119,20 +119,15 @@ defmodule TetoBot.Interactions do
   end
 
   defp handle_leaderboard(interaction, guild_id) do
-    guild_id_str = Integer.to_string(guild_id)
-    leaderboard_key = "leaderboard:#{guild_id_str}"
-
-    case Redix.command(:redix, ["ZREVRANGE", leaderboard_key, 0, 9, "WITHSCORES"]) do
+    case Intimacy.get_leaderboard(guild_id) do
       {:ok, []} ->
         create_response(interaction, "No one has earned intimacy with Teto in this guild yet!")
 
       {:ok, entries} ->
         leaderboard =
-          Enum.chunk_every(entries, 2)
+          entries
           |> Enum.with_index(1)
-          |> Enum.map_join("\n", fn {[user_id_str, intimacy], rank} ->
-            user_id = String.to_integer(user_id_str)
-
+          |> Enum.map_join("\n", fn {%{user_id: user_id, intimacy: intimacy}, rank} ->
             with {:ok, member} <- Api.Guild.member(guild_id, user_id),
                  {:ok, user} <- Api.User.get(user_id) do
               maybe_nickname = if member.nick, do: member.nick, else: user.global_name
@@ -140,7 +135,7 @@ defmodule TetoBot.Interactions do
             else
               {:error, reason} ->
                 Logger.error(
-                  "Failed to get nickname or global_name for member #{user_id_str}: #{inspect(reason)}"
+                  "Failed to get nickname or global_name for member #{user_id}: #{inspect(reason)}"
                 )
 
                 "#{rank}. Unknown - #{intimacy}"
