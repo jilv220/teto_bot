@@ -26,7 +26,7 @@ defmodule TetoBot.Application do
       TetoBot.RateLimiter,
       TetoBot.Guilds.Cache,
       TetoBot.Channels.Cache,
-      TetoBot.Intimacy.Decay,
+      # TetoBot.Intimacy.Decay, # Replaced by Oban worker
       {Nostrum.Bot, bot_options}
     ]
 
