@@ -5,6 +5,7 @@ defmodule TetoBot.Interactions do
 
   require Logger
 
+  alias TetoBot.Users
   alias TetoBot.Interactions.Teto
   alias Nostrum.Struct.User
   alias TetoBot.Intimacy
@@ -98,8 +99,8 @@ defmodule TetoBot.Interactions do
 
   defp handle_feed(interaction, user_id, guild_id, channel_id) do
     with_whitelisted_channel(interaction, channel_id, fn ->
-      with {:ok, :allowed} <- Intimacy.check_feed_cooldown(guild_id, user_id) do
-        Intimacy.set_feed_cooldown!(guild_id, user_id)
+      with {:ok, :allowed} <- Users.check_feed_cooldown(user_id) do
+        Users.set_feed_cooldown(guild_id, user_id)
         Intimacy.increment!(guild_id, user_id, 5)
         {:ok, intimacy} = Intimacy.get(guild_id, user_id)
 
@@ -112,17 +113,6 @@ defmodule TetoBot.Interactions do
           create_response(
             interaction,
             "You've already fed Teto today! Try again in #{format_time_left(time_left)}."
-          )
-
-        {:error, reason} ->
-          Logger.error(
-            "Failed to check feed cooldown for user #{user_id} in guild #{guild_id}: #{inspect(reason)}"
-          )
-
-          create_response(
-            interaction,
-            "Something went wrong while checking the cooldown. Please try again later.",
-            ephemeral: true
           )
       end
     end)

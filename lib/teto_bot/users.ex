@@ -79,4 +79,65 @@ defmodule TetoBot.Users do
       {:error, changeset} -> raise Ecto.InvalidChangesetError, changeset: changeset
     end
   end
+
+  @doc """
+  Checks if a user can use the feed command based on their last_feed timestamp.
+  """
+  @spec check_feed_cooldown(Snowflake.t()) :: {:ok, :allowed} | {:error, integer()}
+  def check_feed_cooldown(user_id) do
+    cooldown_duration =
+      Application.get_env(:teto_bot, TetoBot.Intimacy, [])
+      |> Keyword.get(:feed_cooldown_duration, :timer.hours(24))
+      |> div(1000)
+
+    case Repo.get(User, user_id) do
+      nil ->
+        {:ok, :allowed}
+
+      %User{last_feed: nil} ->
+        {:ok, :allowed}
+
+      %User{last_feed: last_feed} ->
+        now = DateTime.utc_now()
+        time_since = DateTime.diff(now, last_feed, :second)
+
+        if time_since >= cooldown_duration do
+          {:ok, :allowed}
+        else
+          time_left = cooldown_duration - time_since
+          {:error, time_left}
+        end
+    end
+  end
+
+  @doc """
+  Sets the last_feed timestamp for a user.
+  """
+  def set_feed_cooldown(guild_id, user_id) do
+    now = DateTime.utc_now()
+
+    Multi.new()
+    |> Multi.insert(
+      :user,
+      User.changeset(%User{user_id: user_id}, %{last_feed: now}),
+      on_conflict: [set: [last_feed: now, updated_at: now]],
+      conflict_target: :user_id
+    )
+    |> Multi.run(:user_guild, fn _repo, _changes ->
+      Repo.insert_all(
+        "user_guilds",
+        [%{user_id: user_id, guild_id: guild_id, inserted_at: now, updated_at: now}],
+        on_conflict: :nothing,
+        conflict_target: [:user_id, :guild_id]
+      )
+
+      {:ok, :ok}
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{user: user}} -> {:ok, user}
+      {:error, :user, changeset, _} -> {:error, changeset}
+      {:error, :user_guild, reason, _} -> {:error, reason}
+    end
+  end
 end

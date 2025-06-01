@@ -26,6 +26,7 @@ defmodule TetoBot.Interactions.Teto do
 
   require Logger
 
+  alias TetoBot.Users
   alias Nostrum.Struct
 
   alias TetoBot.Format
@@ -50,7 +51,7 @@ defmodule TetoBot.Interactions.Teto do
     Interactions.with_whitelisted_channel(interaction, channel_id, fn ->
       case Intimacy.get(guild_id, user_id) do
         {:ok, intimacy} ->
-          response = build_intimacy_response(intimacy, guild_id, user_id)
+          response = build_intimacy_response(intimacy, user_id)
           Interactions.create_response(interaction, response, ephemeral: true)
 
         {:error, reason} ->
@@ -61,13 +62,13 @@ defmodule TetoBot.Interactions.Teto do
 
   @doc false
   # Builds the formatted response message containing intimacy information.
-  defp build_intimacy_response(intimacy, guild_id, user_id) do
+  defp build_intimacy_response(intimacy, user_id) do
     {curr, next} = Intimacy.get_tier_info(intimacy)
     {curr_val, curr_tier} = curr
     {next_val, next_tier} = next
 
     next_tier_hint_msg = build_next_tier_message(curr_tier, next_tier, curr_val, next_val)
-    feed_cooldown_msg = get_feed_cooldown_message(guild_id, user_id)
+    feed_cooldown_msg = get_feed_cooldown_message(user_id)
 
     """
     **Intimacy:** #{intimacy}
@@ -91,20 +92,13 @@ defmodule TetoBot.Interactions.Teto do
 
   @doc false
   # Gets the formatted feed cooldown status message.
-  defp get_feed_cooldown_message(guild_id, user_id) do
-    case Intimacy.check_feed_cooldown(guild_id, user_id) do
+  defp get_feed_cooldown_message(user_id) do
+    case Users.check_feed_cooldown(user_id) do
       {:ok, :allowed} ->
         "You **can** feed Teto now"
 
       {:error, time_left} when is_integer(time_left) ->
         "The next feed reset is in #{Format.format_time_left(time_left)}"
-
-      {:error, reason} ->
-        Logger.error(
-          "Failed to check feed cooldown for user #{user_id} in guild #{guild_id}: #{inspect(reason)}"
-        )
-
-        "Failed to get feed cooldown"
     end
   end
 
