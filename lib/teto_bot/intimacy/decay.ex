@@ -7,9 +7,7 @@ defmodule TetoBot.Intimacy.Decay do
   that the worker executes.
 
   Additionally, this module offers:
-  -   Manual triggering of the decay process (`trigger_decay/0`), which enqueues a job for the worker.
-  -   A function to retrieve (`get_config/0`) the decay parameters from the application
-      environment.
+  -   Manual triggering of the decay process (`trigger/0`), which enqueues a job for the worker.
 
   ## Configuration
 
@@ -52,45 +50,17 @@ defmodule TetoBot.Intimacy.Decay do
   alias TetoBot.Repo
   alias TetoBot.Users.UserGuild
 
-  # Default configuration values.
-  # These are used by get_config/0 if specific settings are not found in the application environment.
-  # 3 days
-  @default_inactivity_threshold :timer.hours(24 * 3)
-  @default_decay_amount 5
-  @default_minimum_intimacy 5
-  # @default_check_interval is removed as it's not relevant for the worker's config.
-
   @doc """
   Manually enqueues an intimacy decay job for `TetoBot.Intimacy.DecayWorker`.
 
   The worker will use the decay configuration loaded from the application
   environment at the time of its execution.
   """
-  def trigger_decay do
+  def trigger do
     %{}
     |> Intimacy.DecayWorker.new()
     |> Oban.insert()
   end
-
-  @doc """
-  Retrieves the intimacy decay configuration from the application environment.
-
-  This function is used by `TetoBot.Intimacy.DecayWorker` to load its settings.
-  It returns a map containing `:inactivity_threshold`, `:decay_amount`, and
-  `:minimum_intimacy`, applying defaults if specific values are not set.
-  """
-  def get_config do
-    app_config = Application.get_env(:teto_bot, TetoBot.Intimacy.Decay, [])
-
-    %{
-      inactivity_threshold:
-        Keyword.get(app_config, :inactivity_threshold, @default_inactivity_threshold),
-      decay_amount: Keyword.get(app_config, :decay_amount, @default_decay_amount),
-      minimum_intimacy: Keyword.get(app_config, :minimum_intimacy, @default_minimum_intimacy)
-    }
-  end
-
-  # update_config/1 function is removed.
 
   # Public Functions for Worker / Manual Triggering
   @doc """
@@ -113,21 +83,12 @@ defmodule TetoBot.Intimacy.Decay do
   # Private Helper Functions
 
   defp process_guild_decay(guild_id, config) do
-    # Guilds.members/1 is expected to return a list of {user_id, current_intimacy} tuples.
-    # This data might originate from a cache or direct DB query depending on Guilds module.
     case Guilds.members(guild_id) do
       {:ok, members} ->
         inactive_members = filter_inactive_members(guild_id, members, config)
-        # apply_decay_to_members now uses Ecto to update Postgres
         apply_decay_to_members(guild_id, inactive_members, config)
 
-        # The log message from apply_decay_to_members is now more specific.
-        # This log provides a summary for the guild.
-        if length(inactive_members) > 0 do
-          Logger.info(
-            "Decay process completed for guild #{guild_id}. Checked #{length(members)} members, found #{length(inactive_members)} potentially inactive."
-          )
-        end
+        log_decay_completion(guild_id, members, inactive_members)
 
       {:error, reason} ->
         Logger.error("Failed to process decay for guild #{guild_id}: #{inspect(reason)}")
@@ -138,7 +99,7 @@ defmodule TetoBot.Intimacy.Decay do
     current_time = System.system_time(:millisecond)
     threshold = current_time - config.inactivity_threshold
 
-    Enum.filter(members, fn {user_id, intimacy} ->
+    Enum.filter(members, fn %UserGuild{user_id: user_id, intimacy: intimacy} ->
       intimacy >= config.minimum_intimacy && user_inactive?(guild_id, user_id, threshold)
     end)
   end
@@ -153,70 +114,77 @@ defmodule TetoBot.Intimacy.Decay do
     end
   end
 
+  defp log_decay_completion(guild_id, members, inactive_members) do
+    if length(inactive_members) > 0 do
+      Logger.info(
+        "Decay process completed for guild #{guild_id}. Checked #{length(members)} members, found #{length(inactive_members)} potentially inactive."
+      )
+    end
+  end
+
   # apply_decay_to_members/3: Updates intimacy scores in Postgres via Ecto.
   # Calculates new intimacy and, if changed, updates the UserGuild record.
+  defp apply_decay_to_members(_guild_id, [], _config), do: :ok
+
   defp apply_decay_to_members(guild_id, inactive_members, config) do
-    if Enum.empty?(inactive_members) do
-      Logger.debug("No inactive members to decay in guild #{guild_id}.")
-      :ok
-    else
-      updates_count =
-        inactive_members
-        |> Enum.count(fn {user_id, current_intimacy} ->
-          new_intimacy = max(current_intimacy - config.decay_amount, config.minimum_intimacy)
+    updates_count =
+      inactive_members
+      |> Enum.map(&process_member_decay(guild_id, &1, config))
+      |> Enum.count(& &1)
 
-          if new_intimacy != current_intimacy do
-            query =
-              from(ug in UserGuild,
-                where: ug.guild_id == ^guild_id and ug.user_id == ^user_id
-              )
+    log_update_results(guild_id, updates_count)
+  end
 
-            # Update the UserGuild record in Postgres.
-            case Repo.update_all(query,
-                   set: [intimacy: new_intimacy, updated_at: DateTime.utc_now()]
-                 ) do
-              {1, _} ->
-                Logger.info(
-                  "Ecto: Decayed intimacy for user #{user_id} in guild #{guild_id} from #{current_intimacy} to #{new_intimacy}."
-                )
+  defp process_member_decay(
+         guild_id,
+         %UserGuild{user_id: user_id, intimacy: current_intimacy},
+         config
+       ) do
+    new_intimacy = max(current_intimacy - config.decay_amount, config.minimum_intimacy)
 
-                # Count this update
-                true
+    case new_intimacy == current_intimacy do
+      # No update needed
+      true -> false
+      false -> update_member_intimacy(guild_id, user_id, current_intimacy, new_intimacy)
+    end
+  end
 
-              {0, _} ->
-                Logger.warning(
-                  "Ecto: Failed to find UserGuild record for user #{user_id} in guild #{guild_id} during decay."
-                )
+  defp update_member_intimacy(guild_id, user_id, current_intimacy, new_intimacy) do
+    query = from(ug in UserGuild, where: ug.guild_id == ^guild_id and ug.user_id == ^user_id)
 
-                # Not updated
-                false
-
-              {:error, reason} ->
-                Logger.error(
-                  "Ecto: Failed to decay intimacy for user #{user_id} in guild #{guild_id}. Reason: #{inspect(reason)}"
-                )
-
-                # Not updated
-                false
-            end
-          else
-            # Intimacy score did not change, no update needed.
-            false
-          end
-        end)
-
-      if updates_count > 0 do
+    case Repo.update_all(query, set: [intimacy: new_intimacy, updated_at: DateTime.utc_now()]) do
+      {1, _} ->
         Logger.info(
-          "Ecto: Successfully updated intimacy for #{updates_count} users in guild #{guild_id}."
+          "Ecto: Decayed intimacy for user #{user_id} in guild #{guild_id} from #{current_intimacy} to #{new_intimacy}."
         )
-      else
-        Logger.info(
-          "Ecto: No users required intimacy updates in guild #{guild_id} after filtering."
+
+        true
+
+      {0, _} ->
+        Logger.warning(
+          "Ecto: Failed to find UserGuild record for user #{user_id} in guild #{guild_id} during decay."
         )
+
+        false
+
+      {:error, reason} ->
+        Logger.error(
+          "Ecto: Failed to decay intimacy for user #{user_id} in guild #{guild_id}. Reason: #{inspect(reason)}"
+        )
+
+        false
+    end
+  end
+
+  defp log_update_results(guild_id, updates_count) do
+    message =
+      case updates_count do
+        0 -> "Ecto: No users required intimacy updates in guild #{guild_id} after filtering."
+        count -> "Ecto: Successfully updated intimacy for #{count} users in guild #{guild_id}."
       end
 
-      :ok
-    end
+    Logger.info(message)
+    :ok
   end
 
   def validate_positive_integer(value, _key) when is_integer(value) and value > 0, do: :ok

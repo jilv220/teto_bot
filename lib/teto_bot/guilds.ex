@@ -83,28 +83,12 @@ defmodule TetoBot.Guilds do
 
   def member?(_), do: false
 
-  @spec members(Snowflake.t()) :: {:ok, [Snowflake.t()]} | {:error, any()}
-  @doc """
-  Get all member user IDs from a specific guild
-  Returns a list of user IDs (Snowflakes) that are members of the guild
-
-  ## Examples
-      iex> TetoBot.Guilds.members(12345)
-      {:ok, [67890, 11111, 22222]}
-
-      iex> TetoBot.Guilds.members(99999)
-      {:ok, []}
-
-      iex> TetoBot.Guilds.members("invalid")
-      {:error, :invalid_id}
-  """
   def members(guild_id) when Snowflake.is_snowflake(guild_id) do
     try do
       result =
         from(ug in UserGuild,
           where: ug.guild_id == ^guild_id,
-          select: ug.user_id,
-          order_by: ug.user_id
+          select: [:user_id, :intimacy]
         )
         |> @repo.all([])
 

@@ -43,7 +43,6 @@ config :teto_bot,
 config :teto_bot, TetoBot.Intimacy, feed_cooldown_duration: :timer.hours(24)
 
 config :teto_bot, TetoBot.Intimacy.Decay,
-  check_interval: :timer.hours(12),
   inactivity_threshold: :timer.hours(24 * 3),
   decay_amount: 4,
   minimum_intimacy: 5
