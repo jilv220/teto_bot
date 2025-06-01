@@ -37,6 +37,7 @@ defmodule TetoBot.Users do
       iex> TetoBot.Users.update_last_interaction(invalid_user_id)
       {:error, %Ecto.Changeset{}}
   """
+
   @spec update_last_interaction(Snowflake.t(), Snowflake.t()) ::
           {:ok, User} | {:error, Ecto.Changeset.t()}
   def update_last_interaction(guild_id, user_id) do
