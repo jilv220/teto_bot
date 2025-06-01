@@ -3,101 +3,99 @@ defmodule TetoBot.Users do
   alias Ecto.Multi
 
   alias TetoBot.Repo
-  alias TetoBot.Users.User
+  alias TetoBot.Users.{User, UserGuild}
 
   @doc """
-  Gets the last interaction timestamp for a user.
-  Returns {:error, :not_found} if the user doesn't exist.
+  Gets the last interaction timestamp for a user in a specific guild.
+  Returns {:error, :not_found} if the user doesn't exist in that guild.
 
   ## Examples
-      iex> TetoBot.Users.get_last_interaction(67890)
+      iex> TetoBot.Users.get_last_interaction(12345, 67890)
       {:ok, ~U[2025-05-31 10:30:00Z]}
 
-      iex> TetoBot.Users.get_last_interaction(99999)
+      iex> TetoBot.Users.get_last_interaction(12345, 99999)
       {:error, :not_found}
   """
-  @spec get_last_interaction(integer()) :: {:ok, DateTime.t()} | {:error, :not_found}
-  def get_last_interaction(user_id) do
-    case Repo.get(User, user_id) do
+  @spec get_last_interaction(integer(), integer()) :: {:ok, DateTime.t()} | {:error, :not_found}
+  def get_last_interaction(guild_id, user_id) do
+    case Repo.get_by(UserGuild, guild_id: guild_id, user_id: user_id) do
       nil -> {:error, :not_found}
-      %User{last_interaction: nil} -> {:error, :not_found}
-      %User{last_interaction: datetime} -> {:ok, datetime}
+      %UserGuild{last_interaction: nil} -> {:error, :not_found}
+      %UserGuild{last_interaction: datetime} -> {:ok, datetime}
     end
   end
 
   @doc """
-  Updates the last interaction timestamp for a user.
-  Creates the user record if it doesn't exist.
+  Updates the last interaction timestamp for a user in a specific guild.
+  Creates the user and user_guild records if they don't exist.
   Should be called when a user chats or uses commands to track activity.
 
   ## Examples
-      iex> TetoBot.Users.update_last_interaction(67890)
-      {:ok, %User{}}
+      iex> TetoBot.Users.update_last_interaction(12345, 67890)
+      {:ok, %UserGuild{}}
 
-      iex> TetoBot.Users.update_last_interaction(invalid_user_id)
+      iex> TetoBot.Users.update_last_interaction(invalid_guild_id, invalid_user_id)
       {:error, %Ecto.Changeset{}}
   """
-
   @spec update_last_interaction(Snowflake.t(), Snowflake.t()) ::
-          {:ok, User} | {:error, Ecto.Changeset.t()}
+          {:ok, UserGuild} | {:error, Ecto.Changeset.t()}
   def update_last_interaction(guild_id, user_id) do
     now = DateTime.utc_now()
 
     Multi.new()
     |> Multi.insert(
       :user,
-      User.changeset(%User{user_id: user_id}, %{last_interaction: now}),
-      on_conflict: [set: [last_interaction: now, updated_at: now]],
+      User.changeset(%User{user_id: user_id}, %{}),
+      on_conflict: [set: [updated_at: now]],
       conflict_target: :user_id
     )
-    |> Multi.run(:user_guild, fn _repo, _changes ->
-      result =
-        Repo.insert_all(
-          "user_guilds",
-          [%{user_id: user_id, guild_id: guild_id, inserted_at: now, updated_at: now}],
-          on_conflict: :nothing,
-          conflict_target: [:user_id, :guild_id]
-        )
-
-      {:ok, result}
-    end)
+    |> Multi.insert(
+      :user_guild,
+      UserGuild.changeset(%UserGuild{}, %{
+        user_id: user_id,
+        guild_id: guild_id,
+        last_interaction: now
+      }),
+      on_conflict: [set: [last_interaction: now, updated_at: now]],
+      conflict_target: [:user_id, :guild_id]
+    )
     |> Repo.transaction()
     |> case do
-      {:ok, %{user: user}} -> {:ok, user}
+      {:ok, %{user_guild: user_guild}} -> {:ok, user_guild}
       {:error, :user, changeset, _} -> {:error, changeset}
-      {:error, :user_guild, reason, _} -> {:error, reason}
+      {:error, :user_guild, changeset, _} -> {:error, changeset}
     end
   end
 
   @doc """
-  Same as update_last_interaction/1 but raises on error.
+  Same as update_last_interaction/2 but raises on error.
   """
-  @spec update_last_interaction!(Snowflake.t(), Snowflake.t()) :: User
+  @spec update_last_interaction!(Snowflake.t(), Snowflake.t()) :: UserGuild
   def update_last_interaction!(guild_id, user_id) do
     case update_last_interaction(guild_id, user_id) do
-      {:ok, user} -> user
+      {:ok, user_guild} -> user_guild
       {:error, changeset} -> raise Ecto.InvalidChangesetError, changeset: changeset
     end
   end
 
   @doc """
-  Checks if a user can use the feed command based on their last_feed timestamp.
+  Checks if a user can use the feed command based on their last_feed timestamp in a specific guild.
   """
-  @spec check_feed_cooldown(Snowflake.t()) :: {:ok, :allowed} | {:error, integer()}
-  def check_feed_cooldown(user_id) do
+  @spec check_feed_cooldown(Snowflake.t(), Snowflake.t()) :: {:ok, :allowed} | {:error, integer()}
+  def check_feed_cooldown(guild_id, user_id) do
     cooldown_duration =
       Application.get_env(:teto_bot, TetoBot.Intimacy, [])
       |> Keyword.get(:feed_cooldown_duration, :timer.hours(24))
       |> div(1000)
 
-    case Repo.get(User, user_id) do
+    case Repo.get_by(UserGuild, guild_id: guild_id, user_id: user_id) do
       nil ->
         {:ok, :allowed}
 
-      %User{last_feed: nil} ->
+      %UserGuild{last_feed: nil} ->
         {:ok, :allowed}
 
-      %User{last_feed: last_feed} ->
+      %UserGuild{last_feed: last_feed} ->
         now = DateTime.utc_now()
         time_since = DateTime.diff(now, last_feed, :second)
 
@@ -111,33 +109,35 @@ defmodule TetoBot.Users do
   end
 
   @doc """
-  Sets the last_feed timestamp for a user.
+  Sets the last_feed timestamp for a user in a specific guild.
   """
+  @spec set_feed_cooldown(Snowflake.t(), Snowflake.t()) ::
+          {:ok, UserGuild} | {:error, Ecto.Changeset.t()}
   def set_feed_cooldown(guild_id, user_id) do
     now = DateTime.utc_now()
 
     Multi.new()
     |> Multi.insert(
       :user,
-      User.changeset(%User{user_id: user_id}, %{last_feed: now}),
-      on_conflict: [set: [last_feed: now, updated_at: now]],
+      User.changeset(%User{user_id: user_id}, %{}),
+      on_conflict: [set: [updated_at: now]],
       conflict_target: :user_id
     )
-    |> Multi.run(:user_guild, fn _repo, _changes ->
-      Repo.insert_all(
-        "user_guilds",
-        [%{user_id: user_id, guild_id: guild_id, inserted_at: now, updated_at: now}],
-        on_conflict: :nothing,
-        conflict_target: [:user_id, :guild_id]
-      )
-
-      {:ok, :ok}
-    end)
+    |> Multi.insert(
+      :user_guild,
+      UserGuild.changeset(%UserGuild{}, %{
+        user_id: user_id,
+        guild_id: guild_id,
+        last_feed: now
+      }),
+      on_conflict: [set: [last_feed: now, updated_at: now]],
+      conflict_target: [:user_id, :guild_id]
+    )
     |> Repo.transaction()
     |> case do
-      {:ok, %{user: user}} -> {:ok, user}
+      {:ok, %{user_guild: user_guild}} -> {:ok, user_guild}
       {:error, :user, changeset, _} -> {:error, changeset}
-      {:error, :user_guild, reason, _} -> {:error, reason}
+      {:error, :user_guild, changeset, _} -> {:error, changeset}
     end
   end
 end

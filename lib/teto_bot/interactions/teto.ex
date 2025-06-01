@@ -51,7 +51,7 @@ defmodule TetoBot.Interactions.Teto do
     Interactions.with_whitelisted_channel(interaction, channel_id, fn ->
       case Intimacy.get(guild_id, user_id) do
         {:ok, intimacy} ->
-          response = build_intimacy_response(intimacy, user_id)
+          response = build_intimacy_response(intimacy, guild_id, user_id)
           Interactions.create_response(interaction, response, ephemeral: true)
 
         {:error, reason} ->
@@ -62,13 +62,13 @@ defmodule TetoBot.Interactions.Teto do
 
   @doc false
   # Builds the formatted response message containing intimacy information.
-  defp build_intimacy_response(intimacy, user_id) do
+  defp build_intimacy_response(intimacy, guild_id, user_id) do
     {curr, next} = Intimacy.get_tier_info(intimacy)
     {curr_val, curr_tier} = curr
     {next_val, next_tier} = next
 
     next_tier_hint_msg = build_next_tier_message(curr_tier, next_tier, curr_val, next_val)
-    feed_cooldown_msg = get_feed_cooldown_message(user_id)
+    feed_cooldown_msg = get_feed_cooldown_message(guild_id, user_id)
 
     """
     **Intimacy:** #{intimacy}
@@ -92,8 +92,8 @@ defmodule TetoBot.Interactions.Teto do
 
   @doc false
   # Gets the formatted feed cooldown status message.
-  defp get_feed_cooldown_message(user_id) do
-    case Users.check_feed_cooldown(user_id) do
+  defp get_feed_cooldown_message(guild_id, user_id) do
+    case Users.check_feed_cooldown(guild_id, user_id) do
       {:ok, :allowed} ->
         "You **can** feed Teto now"
 

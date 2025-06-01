@@ -1,16 +1,12 @@
 defmodule TetoBot.Intimacy do
   @moduledoc """
   Manages Intimacy for the bot, handling user intimacy scores,
-  cooldowns for commands, and last interaction timestamps using Redis for persistence.
+  cooldowns for commands, and last interaction timestamps.
 
   This module provides functionality to:
   - Retrieve and update user intimacy scores in guild leaderboards.
   - Manage cooldowns for the `/feed` command.
   - Track user interactions for activity decay calculations.
-
-  All operations interact with Redis using the `Redix` client, and errors are handled
-  according to Elixir's "let it crash" philosophy, with appropriate error logging and
-  user-friendly responses.
 
   ## Configuration
 
@@ -18,16 +14,6 @@ defmodule TetoBot.Intimacy do
 
       config :teto_bot, TetoBot.Intimacy,
         feed_cooldown_duration: :timer.hours(24)
-
-  ## Redis Keys
-  - `leaderboard:<guild_id>`: Sorted set storing user IDs and their intimacy scores.
-  - `updated_users:<guild_id>`: Set of user IDs marked for syncing.
-  - `feed_cooldown:<guild_id>:<user_id>`: Key for tracking `/feed` command cooldowns.
-  - `last_interaction:<guild_id>:<user_id>`: Key storing the timestamp of a user's last interaction.
-
-  ## Dependencies
-  - `Redix` for Redis operations.
-  - `Logger` for error logging.
   """
   import Ecto.Query
 
@@ -85,23 +71,23 @@ defmodule TetoBot.Intimacy do
       :ok
   """
   def increment(guild_id, user_id, increment) do
+    now = DateTime.utc_now()
+
     case Repo.get_by(UserGuild, guild_id: guild_id, user_id: user_id) do
       nil ->
-        # This will create the user_guild record with intimacy_score
+        # Create the user_guild record with intimacy score and last_interaction
         Users.update_last_interaction(guild_id, user_id)
 
         from(ug in UserGuild,
           where: ug.guild_id == ^guild_id and ug.user_id == ^user_id
         )
-        |> Repo.update_all(set: [intimacy: increment])
+        |> Repo.update_all(set: [intimacy: increment, last_interaction: now])
 
       %UserGuild{intimacy: current_score} ->
         from(ug in UserGuild,
           where: ug.guild_id == ^guild_id and ug.user_id == ^user_id
         )
-        |> Repo.update_all(set: [intimacy: current_score + increment])
-
-        Users.update_last_interaction(guild_id, user_id)
+        |> Repo.update_all(set: [intimacy: current_score + increment, last_interaction: now])
     end
 
     :ok
@@ -118,11 +104,15 @@ defmodule TetoBot.Intimacy do
   def get_leaderboard(guild_id, limit \\ 10) do
     try do
       leaderboard =
-        from(ugi in UserGuild,
-          where: ugi.guild_id == ^guild_id,
-          order_by: [desc: ugi.intimacy],
+        from(ug in UserGuild,
+          where: ug.guild_id == ^guild_id,
+          order_by: [desc: ug.intimacy],
           limit: ^limit,
-          select: %{user_id: ugi.user_id, intimacy: ugi.intimacy}
+          select: %{
+            user_id: ug.user_id,
+            intimacy: ug.intimacy,
+            last_interaction: ug.last_interaction
+          }
         )
         |> Repo.all()
 
@@ -182,5 +172,35 @@ defmodule TetoBot.Intimacy do
       |> Enum.at(next_tier_intimacy_idx, Enum.at(intimacy_list, 0))
 
     {{intimacy, curr_intimacy_tier}, next_tier_intimacy_entry}
+  end
+
+  @doc """
+  Gets all users in a guild that need their intimacy scores decayed based on inactivity.
+  This can be used for background jobs to reduce intimacy over time.
+  """
+  @spec get_inactive_users(integer(), integer()) :: {:ok, list()} | {:error, term()}
+  def get_inactive_users(guild_id, days_inactive \\ 7) do
+    try do
+      cutoff_date = DateTime.utc_now() |> DateTime.add(-days_inactive * 24 * 60 * 60, :second)
+
+      inactive_users =
+        from(ug in UserGuild,
+          where: ug.guild_id == ^guild_id,
+          where: ug.last_interaction < ^cutoff_date or is_nil(ug.last_interaction),
+          where: ug.intimacy > 0,
+          select: %{
+            user_id: ug.user_id,
+            intimacy: ug.intimacy,
+            last_interaction: ug.last_interaction
+          }
+        )
+        |> Repo.all()
+
+      {:ok, inactive_users}
+    rescue
+      error ->
+        Logger.error("Failed to get inactive users for guild #{guild_id}: #{inspect(error)}")
+        {:error, error}
+    end
   end
 end

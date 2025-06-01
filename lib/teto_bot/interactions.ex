@@ -99,7 +99,7 @@ defmodule TetoBot.Interactions do
 
   defp handle_feed(interaction, user_id, guild_id, channel_id) do
     with_whitelisted_channel(interaction, channel_id, fn ->
-      with {:ok, :allowed} <- Users.check_feed_cooldown(user_id) do
+      with {:ok, :allowed} <- Users.check_feed_cooldown(guild_id, user_id) do
         Users.set_feed_cooldown(guild_id, user_id)
         Intimacy.increment(guild_id, user_id, 5)
         {:ok, intimacy} = Intimacy.get(guild_id, user_id)

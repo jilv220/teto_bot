@@ -1,6 +1,10 @@
 defmodule TetoBot.Guilds do
   require Nostrum.Snowflake
+  require Logger
 
+  import Ecto.Query
+
+  alias TetoBot.Users.UserGuild
   alias Nostrum.Snowflake
   alias TetoBot.Guilds.Guild
   alias TetoBot.Guilds.Cache
@@ -78,6 +82,41 @@ defmodule TetoBot.Guilds do
   end
 
   def member?(_), do: false
+
+  @spec members(Snowflake.t()) :: {:ok, [Snowflake.t()]} | {:error, any()}
+  @doc """
+  Get all member user IDs from a specific guild
+  Returns a list of user IDs (Snowflakes) that are members of the guild
+
+  ## Examples
+      iex> TetoBot.Guilds.members(12345)
+      {:ok, [67890, 11111, 22222]}
+
+      iex> TetoBot.Guilds.members(99999)
+      {:ok, []}
+
+      iex> TetoBot.Guilds.members("invalid")
+      {:error, :invalid_id}
+  """
+  def members(guild_id) when Snowflake.is_snowflake(guild_id) do
+    try do
+      result =
+        from(ug in UserGuild,
+          where: ug.guild_id == ^guild_id,
+          select: ug.user_id,
+          order_by: ug.user_id
+        )
+        |> @repo.all([])
+
+      {:ok, result}
+    rescue
+      error in Ecto.QueryError ->
+        Logger.error("Failed to get members: #{inspect(error)}")
+        {:error, error}
+    end
+  end
+
+  def members(_), do: {:error, :invalid_id}
 
   @spec ids() :: [Snowflake.t()]
   @doc """

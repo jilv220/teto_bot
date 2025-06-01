@@ -136,11 +136,9 @@ defmodule TetoBot.Intimacy.Decay do
   end
 
   defp process_guild_decay(guild_id, config) do
-    leaderboard_key = "leaderboard:#{guild_id}"
-
-    case get_guild_members(leaderboard_key) do
+    case Guilds.members(guild_id) do
       {:ok, members} ->
-        inactive_members = filter_inactive_members(members, config)
+        inactive_members = filter_inactive_members(guild_id, members, config)
         apply_decay_to_members(guild_id, inactive_members, config)
 
         if length(inactive_members) > 0 do
@@ -154,38 +152,17 @@ defmodule TetoBot.Intimacy.Decay do
     end
   end
 
-  defp get_guild_members(leaderboard_key) do
-    case Redix.command(:redix, ["ZRANGE", leaderboard_key, "0", "-1", "WITHSCORES"]) do
-      {:ok, members_with_scores} ->
-        members =
-          members_with_scores
-          |> Enum.chunk_every(2)
-          |> Enum.map(fn [user_id, score_str] ->
-            case Integer.parse(score_str) do
-              {score, _} -> {user_id, score}
-              :error -> nil
-            end
-          end)
-          |> Enum.reject(&is_nil/1)
-
-        {:ok, members}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  defp filter_inactive_members(members, config) do
+  defp filter_inactive_members(guild_id, members, config) do
     current_time = System.system_time(:millisecond)
     threshold = current_time - config.inactivity_threshold
 
     Enum.filter(members, fn {user_id, intimacy} ->
-      intimacy >= config.minimum_intimacy && user_inactive?(user_id, threshold)
+      intimacy >= config.minimum_intimacy && user_inactive?(guild_id, user_id, threshold)
     end)
   end
 
-  defp user_inactive?(user_id, threshold) do
-    case Users.get_last_interaction(user_id) do
+  defp user_inactive?(guild_id, user_id, threshold) do
+    case Users.get_last_interaction(guild_id, user_id) do
       {:error, :not_found} ->
         true
 

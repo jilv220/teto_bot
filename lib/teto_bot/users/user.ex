@@ -4,9 +4,6 @@ defmodule TetoBot.Users.User do
 
   @primary_key {:user_id, :integer, autogenerate: false}
   schema "users" do
-    field(:last_interaction, :utc_datetime)
-    field(:last_feed, :utc_datetime)
-
     many_to_many(:guilds, TetoBot.Guilds.Guild,
       join_through: "user_guilds",
       join_keys: [user_id: :user_id, guild_id: :guild_id]
@@ -17,7 +14,7 @@ defmodule TetoBot.Users.User do
 
   def changeset(user, attrs) do
     user
-    |> cast(attrs, [:user_id, :last_interaction, :last_feed])
+    |> cast(attrs, [:user_id])
     |> validate_required([:user_id])
     |> unique_constraint(:user_id, name: :users_pkey)
   end
