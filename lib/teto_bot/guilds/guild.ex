@@ -4,6 +4,11 @@ defmodule TetoBot.Guilds.Guild do
 
   @primary_key {:guild_id, :integer, autogenerate: false}
   schema "guilds" do
+    many_to_many(:users, TetoBot.Users.User,
+      join_through: "user_guilds",
+      join_keys: [guild_id: :guild_id, user_id: :user_id]
+    )
+
     timestamps()
   end
 

@@ -29,6 +29,7 @@ defmodule TetoBot.Intimacy do
   - `Redix` for Redis operations.
   - `Logger` for error logging.
   """
+  alias TetoBot.Users
 
   require Logger
 
@@ -97,9 +98,10 @@ defmodule TetoBot.Intimacy do
 
     Redix.pipeline!(:redix, [
       ["ZINCRBY", leaderboard_key, Integer.to_string(increment), user_id_str],
-      ["SADD", updated_users_key, user_id_str],
-      get_interaction_update_command(guild_id, user_id)
+      ["SADD", updated_users_key, user_id_str]
     ])
+
+    Users.update_last_interaction!(user_id)
 
     :ok
   end
@@ -176,54 +178,6 @@ defmodule TetoBot.Intimacy do
     ])
 
     :ok
-  end
-
-  @spec update_last_interaction(integer(), integer()) ::
-          :ok | {:error, atom() | Redix.Error.t() | Redix.ConnectionError.t()}
-  @doc """
-  Updates the last interaction timestamp for a user in a guild.
-  Should be called when a user chats or uses the `/feed` command to track activity.
-
-  ## Side Effects
-  - Updates the `last_interaction:<guild_id>:<user_id>` key with the current timestamp.
-  - Logs an error if the Redis operation fails.
-
-  ## Examples
-      iex> TetoBot.Intimacy.update_last_interaction(12345, 67890)
-      :ok
-  """
-  def update_last_interaction(guild_id, user_id) do
-    cmd = get_interaction_update_command(guild_id, user_id)
-
-    case Redix.command(:redix, cmd) do
-      {:ok, _} ->
-        :ok
-
-      {:error, reason} ->
-        Logger.error(
-          "Failed to update last interaction for user #{user_id} in guild #{guild_id}: #{inspect(reason)}"
-        )
-
-        {:error, reason}
-    end
-  end
-
-  @spec get_interaction_update_command(integer(), integer()) :: [String.t()]
-  @doc """
-  Generates a Redis command to update the last interaction timestamp for a user in a guild.
-  Used internally for atomic pipeline operations.
-
-  ## Examples
-      iex> TetoBot.Intimacy.get_interaction_update_command(12345, 67890)
-      ["SET", "last_interaction:12345:67890", "16970512340000"]
-  """
-  def get_interaction_update_command(guild_id, user_id) do
-    user_id_str = Integer.to_string(user_id)
-    guild_id_str = Integer.to_string(guild_id)
-    interaction_key = "last_interaction:#{guild_id_str}:#{user_id_str}"
-    timestamp = System.system_time(:millisecond)
-
-    ["SET", interaction_key, timestamp]
   end
 
   @spec get_tier(integer()) :: String.t()
