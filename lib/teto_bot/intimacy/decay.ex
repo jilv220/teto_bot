@@ -1,139 +1,86 @@
 defmodule TetoBot.Intimacy.Decay do
   @moduledoc """
-  A GenServer that periodically decays intimacy scores for users who haven't
-  interacted with the bot (via chat or /feed) for a specified period.
+  Provides utility functions for the intimacy decay process and its configuration.
+
+  The actual periodic decay of intimacy scores is performed by `TetoBot.Intimacy.DecayWorker`,
+  an Oban worker. This module supplies the core logic (`perform_decay_check_logic/1`)
+  that the worker executes.
+
+  Additionally, this module offers:
+  -   Manual triggering of the decay process (`trigger/0`), which enqueues a job for the worker.
 
   ## Configuration
-  Configurable via `start_link/1` options or application environment:
-      config :teto_bot, TetoBot.Leaderboards.Decay,
-        check_interval: :timer.hours(12),
-        inactivity_threshold: :timer.hours(24 * 3),
+
+  The behavior of the intimacy decay system is controlled by settings in the
+  application environment, typically configured in `config/config.exs` or related
+  environment-specific files. These settings define thresholds for inactivity,
+  the amount of decay, and the minimum score.
+
+  Example configuration (typically in `config/config.exs`):
+
+      config :teto_bot, TetoBot.Intimacy.Decay,
+        inactivity_threshold: :timer.hours(24 * 3), # 3 days
         decay_amount: 5,
         minimum_intimacy: 5
+
+  Key configuration parameters (loaded at application start/deployment):
+  -   `:inactivity_threshold`: Duration of inactivity before decay applies.
+  -   `:decay_amount`: Points subtracted per decay cycle.
+  -   `:minimum_intimacy`: Floor for intimacy scores after decay.
+
+  The decay process involves:
+  1. Identifying inactive users based on their last interaction time.
+  2. Calculating the new intimacy score.
+  3. Updating the user's intimacy score directly in the primary database (Postgres)
+     for the respective guild using Ecto.
+
+  These settings are loaded by `TetoBot.Intimacy.DecayWorker` from the application
+  environment when it performs a job. Runtime configuration updates are not supported
+  through this module; changes require a deployment or application restart.
   """
+
+  require Logger
+  import Ecto.Query
+
+  alias TetoBot.Intimacy
   alias TetoBot.Users
   alias TetoBot.Guilds
+  alias Oban
 
-  use GenServer
-  require Logger
-
-  # Default configuration
-  @default_check_interval :timer.hours(12)
-  @default_inactivity_threshold :timer.hours(24 * 3)
-  @default_decay_amount 5
-  @default_minimum_intimacy 5
+  alias TetoBot.Repo
+  alias TetoBot.Users.UserGuild
 
   @doc """
-  Starts the decay GenServer.
+  Manually enqueues an intimacy decay job for `TetoBot.Intimacy.DecayWorker`.
 
-  ## Options
-  - `:check_interval` - Time between decay checks (milliseconds, default: 1 hour).
-  - `:inactivity_threshold` - Inactivity period before decay (milliseconds, default: 7 days).
-  - `:decay_amount` - Points to subtract per decay cycle (integer, default: 5).
-  - `:minimum_intimacy` - Minimum intimacy score to maintain (integer, default: 10).
+  The worker will use the decay configuration loaded from the application
+  environment at the time of its execution.
   """
-  def start_link(opts \\ []) do
-    GenServer.start_link(__MODULE__, opts, name: __MODULE__)
+  def trigger do
+    %{}
+    |> Intimacy.DecayWorker.new()
+    |> Oban.insert()
   end
 
+  # Public Functions for Worker / Manual Triggering
   @doc """
-  Manually triggers a decay check for all guilds.
+  Performs the intimacy decay logic based on the provided `config` map.
+
+  This function iterates through all known guilds, identifies members eligible
+  for decay based on the configuration, and applies the decay to their
+  intimacy scores stored in the Postgres database via Ecto.
+
+  It is primarily called by `TetoBot.Intimacy.DecayWorker`.
   """
-  def trigger_decay do
-    GenServer.cast(__MODULE__, :decay_check)
-  end
-
-  @doc """
-  Gets the current configuration for the decay system.
-  """
-  def get_config do
-    GenServer.call(__MODULE__, :get_config)
-  end
-
-  @doc """
-  Updates the decay configuration at runtime.
-  """
-  def update_config(new_config) do
-    GenServer.call(__MODULE__, {:update_config, new_config})
-  end
-
-  # GenServer Callbacks
-
-  @impl true
-  def init(_opts) do
-    config = Application.get_env(:teto_bot, TetoBot.Intimacy.Decay, [])
-
-    config = %{
-      check_interval: Keyword.get(config, :check_interval, @default_check_interval),
-      inactivity_threshold:
-        Keyword.get(config, :inactivity_threshold, @default_inactivity_threshold),
-      decay_amount: Keyword.get(config, :decay_amount, @default_decay_amount),
-      minimum_intimacy: Keyword.get(config, :minimum_intimacy, @default_minimum_intimacy)
-    }
-
-    with :ok <- validate_positive_integer(config.check_interval, :check_interval),
-         :ok <- validate_positive_integer(config.inactivity_threshold, :inactivity_threshold),
-         :ok <- validate_positive_integer(config.decay_amount, :decay_amount),
-         :ok <- validate_positive_integer(config.minimum_intimacy, :minimum_intimacy) do
-      schedule_decay_check(config.check_interval)
-      Logger.info("Intimacy decay system started with config: #{inspect(config)}")
-      {:ok, config}
-    else
-      {:error, reason} ->
-        Logger.error("Failed to start Decay GenServer: #{reason}")
-        {:stop, reason}
-    end
-  end
-
-  @impl true
-  def handle_call(:get_config, _from, config) do
-    {:reply, config, config}
-  end
-
-  @impl true
-  def handle_call({:update_config, new_config}, _from, old_config) do
-    updated_config = Map.merge(old_config, new_config)
-
-    with :ok <- validate_positive_integer(updated_config.check_interval, :check_interval),
-         :ok <-
-           validate_positive_integer(updated_config.inactivity_threshold, :inactivity_threshold),
-         :ok <- validate_positive_integer(updated_config.decay_amount, :decay_amount),
-         :ok <- validate_positive_integer(updated_config.minimum_intimacy, :minimum_intimacy) do
-      Logger.info("Decay config updated: #{inspect(updated_config)}")
-      {:reply, :ok, updated_config}
-    else
-      {:error, reason} ->
-        Logger.error("Failed to update config: #{reason}")
-        {:reply, {:error, reason}, old_config}
-    end
-  end
-
-  @impl true
-  def handle_cast(:decay_check, config) do
-    perform_decay_check(config)
-    {:noreply, config}
-  end
-
-  @impl true
-  def handle_info(:decay_check, config) do
-    perform_decay_check(config)
-    schedule_decay_check(config.check_interval)
-    {:noreply, config}
-  end
-
-  # Private Functions
-
-  defp schedule_decay_check(interval) do
-    Process.send_after(self(), :decay_check, interval)
-  end
-
-  defp perform_decay_check(config) do
-    Logger.info("Starting intimacy decay check")
+  def perform_decay_check_logic(config) do
+    Logger.info("Starting intimacy decay check (logic invoked)")
 
     guild_ids = Guilds.ids()
     Enum.each(guild_ids, &process_guild_decay(&1, config))
-    Logger.info("Completed decay check for #{length(guild_ids)} guilds")
+    Logger.info("Completed decay check (logic invoked) for #{length(guild_ids)} guilds")
   end
+
+  # Private Helper Functions
 
   defp process_guild_decay(guild_id, config) do
     case Guilds.members(guild_id) do
@@ -141,11 +88,7 @@ defmodule TetoBot.Intimacy.Decay do
         inactive_members = filter_inactive_members(guild_id, members, config)
         apply_decay_to_members(guild_id, inactive_members, config)
 
-        if length(inactive_members) > 0 do
-          Logger.info(
-            "Applied decay to #{length(inactive_members)} inactive members in guild #{guild_id}"
-          )
-        end
+        log_decay_completion(guild_id, members, inactive_members)
 
       {:error, reason} ->
         Logger.error("Failed to process decay for guild #{guild_id}: #{inspect(reason)}")
@@ -156,7 +99,7 @@ defmodule TetoBot.Intimacy.Decay do
     current_time = System.system_time(:millisecond)
     threshold = current_time - config.inactivity_threshold
 
-    Enum.filter(members, fn {user_id, intimacy} ->
+    Enum.filter(members, fn %UserGuild{user_id: user_id, intimacy: intimacy} ->
       intimacy >= config.minimum_intimacy && user_inactive?(guild_id, user_id, threshold)
     end)
   end
@@ -171,42 +114,81 @@ defmodule TetoBot.Intimacy.Decay do
     end
   end
 
-  defp apply_decay_to_members(guild_id, inactive_members, config) do
-    if inactive_members != [] do
-      leaderboard_key = "leaderboard:#{guild_id}"
-      updated_users_key = "updated_users:#{guild_id}"
-
-      commands =
-        Enum.flat_map(inactive_members, fn {user_id, current_intimacy} ->
-          Logger.info("Apply decay to user #{user_id}")
-          new_intimacy = max(current_intimacy - config.decay_amount, config.minimum_intimacy)
-
-          if new_intimacy != current_intimacy do
-            [
-              ["ZADD", leaderboard_key, Integer.to_string(new_intimacy), user_id],
-              ["SADD", updated_users_key, user_id]
-            ]
-          else
-            []
-          end
-        end)
-
-      if commands != [] do
-        case Redix.pipeline(:redix, commands) do
-          {:ok, _results} ->
-            Logger.debug(
-              "Applied decay to #{div(length(commands), 2)} users in guild #{guild_id}"
-            )
-
-          {:error, reason} ->
-            Logger.error("Failed to apply decay in guild #{guild_id}: #{inspect(reason)}")
-        end
-      end
+  defp log_decay_completion(guild_id, members, inactive_members) do
+    if length(inactive_members) > 0 do
+      Logger.info(
+        "Decay process completed for guild #{guild_id}. Checked #{length(members)} members, found #{length(inactive_members)} potentially inactive."
+      )
     end
   end
 
-  defp validate_positive_integer(value, _key) when is_integer(value) and value > 0, do: :ok
+  # apply_decay_to_members/3: Updates intimacy scores in Postgres via Ecto.
+  # Calculates new intimacy and, if changed, updates the UserGuild record.
+  defp apply_decay_to_members(_guild_id, [], _config), do: :ok
 
-  defp validate_positive_integer(value, key),
+  defp apply_decay_to_members(guild_id, inactive_members, config) do
+    updates_count =
+      inactive_members
+      |> Enum.map(&process_member_decay(guild_id, &1, config))
+      |> Enum.count(& &1)
+
+    log_update_results(guild_id, updates_count)
+  end
+
+  defp process_member_decay(
+         guild_id,
+         %UserGuild{user_id: user_id, intimacy: current_intimacy},
+         config
+       ) do
+    new_intimacy = max(current_intimacy - config.decay_amount, config.minimum_intimacy)
+
+    case new_intimacy == current_intimacy do
+      # No update needed
+      true -> false
+      false -> update_member_intimacy(guild_id, user_id, current_intimacy, new_intimacy)
+    end
+  end
+
+  defp update_member_intimacy(guild_id, user_id, current_intimacy, new_intimacy) do
+    query = from(ug in UserGuild, where: ug.guild_id == ^guild_id and ug.user_id == ^user_id)
+
+    case Repo.update_all(query, set: [intimacy: new_intimacy, updated_at: DateTime.utc_now()]) do
+      {1, _} ->
+        Logger.info(
+          "Ecto: Decayed intimacy for user #{user_id} in guild #{guild_id} from #{current_intimacy} to #{new_intimacy}."
+        )
+
+        true
+
+      {0, _} ->
+        Logger.warning(
+          "Ecto: Failed to find UserGuild record for user #{user_id} in guild #{guild_id} during decay."
+        )
+
+        false
+
+      {:error, reason} ->
+        Logger.error(
+          "Ecto: Failed to decay intimacy for user #{user_id} in guild #{guild_id}. Reason: #{inspect(reason)}"
+        )
+
+        false
+    end
+  end
+
+  defp log_update_results(guild_id, updates_count) do
+    message =
+      case updates_count do
+        0 -> "Ecto: No users required intimacy updates in guild #{guild_id} after filtering."
+        count -> "Ecto: Successfully updated intimacy for #{count} users in guild #{guild_id}."
+      end
+
+    Logger.info(message)
+    :ok
+  end
+
+  def validate_positive_integer(value, _key) when is_integer(value) and value > 0, do: :ok
+
+  def validate_positive_integer(value, key),
     do: {:error, "Invalid #{key}: must be a positive integer, got #{inspect(value)}"}
 end
