@@ -140,8 +140,6 @@ defmodule TetoBot.Intimacy.Decay do
 
     case get_guild_members(leaderboard_key) do
       {:ok, members} ->
-        inspect(members)
-
         inactive_members = filter_inactive_members(members, config)
         apply_decay_to_members(guild_id, inactive_members, config)
 
