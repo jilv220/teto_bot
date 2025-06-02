@@ -19,7 +19,7 @@ defmodule TetoBot.Consumer do
   def handle_event({:GUILD_CREATE, %Guild{id: new_guild_id} = _new_guild, _}) do
     case Guilds.member?(new_guild_id) do
       false ->
-        Guilds.guild_create(new_guild_id)
+        Guilds.create(new_guild_id)
         Logger.info("New guild #{new_guild_id} joined!")
 
       _ ->
@@ -30,7 +30,7 @@ defmodule TetoBot.Consumer do
   def handle_event({:GUILD_DELETE, {%Guild{id: old_guild_id}, _}, _}) do
     case Guilds.member?(old_guild_id) do
       true ->
-        Guilds.guild_delete(old_guild_id)
+        Guilds.delete(old_guild_id)
         Logger.info("Guild #{old_guild_id} has left us!")
 
       _ ->

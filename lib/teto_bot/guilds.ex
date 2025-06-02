@@ -11,13 +11,13 @@ defmodule TetoBot.Guilds do
 
   @repo Application.compile_env(:teto_bot, :repo, TetoBot.Repo)
 
-  @spec guild_create(Snowflake.t()) ::
+  @spec create(Snowflake.t()) ::
           {:ok, Ecto.Schema.t()} | {:error, Ecto.Changeset.t()} | {:error, :invalid_id}
   @doc """
   A guild added our app
   Insert a new guild record `guilds` table and add to cache
   """
-  def guild_create(guild_id) when Snowflake.is_snowflake(guild_id) do
+  def create(guild_id) when Snowflake.is_snowflake(guild_id) do
     case %Guild{}
          |> Guild.changeset(%{guild_id: guild_id})
          |> @repo.insert([]) do
@@ -30,9 +30,9 @@ defmodule TetoBot.Guilds do
     end
   end
 
-  def guild_create(_), do: {:error, :invalid_id}
+  def create(_), do: {:error, :invalid_id}
 
-  @spec guild_delete(Snowflake.t()) ::
+  @spec delete(Snowflake.t()) ::
           {:ok, Ecto.Schema.t()}
           | {:error, Ecto.Changeset.t()}
           | {:error, :not_found}
@@ -41,7 +41,7 @@ defmodule TetoBot.Guilds do
   A guild removed our app
   Remove the record from `guilds` table and cache
   """
-  def guild_delete(guild_id) when Snowflake.is_snowflake(guild_id) do
+  def delete(guild_id) when Snowflake.is_snowflake(guild_id) do
     case @repo.get_by(Guild, [guild_id: guild_id], []) do
       nil ->
         {:error, :not_found}
@@ -58,7 +58,7 @@ defmodule TetoBot.Guilds do
     end
   end
 
-  def guild_delete(_), do: {:error, :invalid_id}
+  def delete(_), do: {:error, :invalid_id}
 
   @doc """
   Check if guild is a member (first check cache, then database if not found)
