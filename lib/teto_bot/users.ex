@@ -83,11 +83,6 @@ defmodule TetoBot.Users do
   """
   @spec check_feed_cooldown(Snowflake.t(), Snowflake.t()) :: {:ok, :allowed} | {:error, integer()}
   def check_feed_cooldown(guild_id, user_id) do
-    cooldown_duration =
-      Application.get_env(:teto_bot, TetoBot.Intimacy, [])
-      |> Keyword.get(:feed_cooldown_duration, :timer.hours(24))
-      |> div(1000)
-
     case Repo.get_by(UserGuild, guild_id: guild_id, user_id: user_id) do
       nil ->
         {:ok, :allowed}
@@ -97,12 +92,13 @@ defmodule TetoBot.Users do
 
       %UserGuild{last_feed: last_feed} ->
         now = DateTime.utc_now()
-        time_since = DateTime.diff(now, last_feed, :second)
+        today_start = DateTime.new!(Date.utc_today(), ~T[00:00:00], "Etc/UTC")
 
-        if time_since >= cooldown_duration do
+        if DateTime.compare(last_feed, today_start) == :lt do
           {:ok, :allowed}
         else
-          time_left = cooldown_duration - time_since
+          tomorrow_start = DateTime.add(today_start, 1, :day)
+          time_left = DateTime.diff(tomorrow_start, now, :second)
           {:error, time_left}
         end
     end

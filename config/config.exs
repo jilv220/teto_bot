@@ -40,8 +40,6 @@ config :teto_bot,
   llm_top_p: 1,
   llm_top_k: 40
 
-config :teto_bot, TetoBot.Intimacy, feed_cooldown_duration: :timer.hours(24)
-
 config :teto_bot, TetoBot.Intimacy.Decay,
   inactivity_threshold: :timer.hours(24 * 3),
   decay_amount: 4,
