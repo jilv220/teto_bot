@@ -9,6 +9,11 @@ defmodule TetoBot.Guilds.Guild do
       join_keys: [guild_id: :guild_id, user_id: :user_id]
     )
 
+    has_many(:channels, TetoBot.Channels.Channel,
+      foreign_key: :guild_id,
+      references: :guild_id
+    )
+
     timestamps()
   end
 
