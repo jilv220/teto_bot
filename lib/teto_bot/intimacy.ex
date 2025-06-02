@@ -164,12 +164,13 @@ defmodule TetoBot.Intimacy do
       intimacy_list
       |> Enum.at(curr_intimacy_idx)
 
-    next_tier_intimacy_idx = curr_intimacy_idx - 1
-
-    # default to highest tier if out of bound
     next_tier_intimacy_entry =
-      intimacy_list
-      |> Enum.at(next_tier_intimacy_idx, Enum.at(intimacy_list, 0))
+      if curr_intimacy_idx == 0 do
+        # Already at highest tier, return same tier
+        {intimacy, curr_intimacy_tier}
+      else
+        intimacy_list |> Enum.at(curr_intimacy_idx - 1)
+      end
 
     {{intimacy, curr_intimacy_tier}, next_tier_intimacy_entry}
   end
