@@ -14,10 +14,11 @@ defmodule TetoBot.Channels do
   Whitelists a channel by its ID.
   Inserts a new channel record into the database.
   """
-  def whitelist_channel(channel_id) when Snowflake.is_snowflake(channel_id) do
+  def whitelist_channel(guild_id, channel_id)
+      when Snowflake.is_snowflake(guild_id) and Snowflake.is_snowflake(channel_id) do
     result =
       %Channel{}
-      |> Channel.changeset(%{channel_id: channel_id})
+      |> Channel.changeset(%{guild_id: guild_id, channel_id: channel_id})
       |> @repo.insert([])
 
     case result do
@@ -30,14 +31,15 @@ defmodule TetoBot.Channels do
     end
   end
 
-  def whitelist_channel(_), do: {:error, :invalid_id}
+  def whitelist_channel(_, _), do: {:error, :invalid_id}
 
   @doc """
   Removes a channel from the whitelist (effectively blacklisting it).
   Deletes the channel record from the database.
   """
-  def blacklist_channel(channel_id) when Snowflake.is_snowflake(channel_id) do
-    case @repo.get_by(Channel, [channel_id: channel_id], []) do
+  def blacklist_channel(guild_id, channel_id)
+      when Snowflake.is_snowflake(guild_id) and Snowflake.is_snowflake(channel_id) do
+    case @repo.get_by(Channel, [guild_id: guild_id, channel_id: channel_id], []) do
       nil ->
         {:error, :not_found}
 
@@ -55,7 +57,7 @@ defmodule TetoBot.Channels do
     end
   end
 
-  def blacklist_channel(_), do: {:error, :invalid_id}
+  def blacklist_channel(_, _), do: {:error, :invalid_id}
 
   @doc """
   Checks if a channel is whitelisted.

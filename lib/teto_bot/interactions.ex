@@ -160,9 +160,9 @@ defmodule TetoBot.Interactions do
     end
   end
 
-  defp handle_whitelist(%Interaction{channel_id: channel_id} = interaction) do
+  defp handle_whitelist(%Interaction{guild_id: guild_id, channel_id: channel_id} = interaction) do
     if can_manage_channels?(interaction) do
-      case Channels.whitelist_channel(channel_id) do
+      case Channels.whitelist_channel(guild_id, channel_id) do
         {:ok, _channel} ->
           create_response(interaction, "Channel <##{channel_id}> whitelisted successfully!",
             ephemeral: true
@@ -190,9 +190,9 @@ defmodule TetoBot.Interactions do
     end
   end
 
-  defp handle_blacklist(%Interaction{channel_id: channel_id} = interaction) do
+  defp handle_blacklist(%Interaction{guild_id: guild_id, channel_id: channel_id} = interaction) do
     if can_manage_channels?(interaction) do
-      case Channels.blacklist_channel(channel_id) do
+      case Channels.blacklist_channel(guild_id, channel_id) do
         {:ok, _channel} ->
           create_response(
             interaction,
