@@ -1,154 +1,70 @@
 defmodule TetoBot.LLM do
   @moduledoc """
-  Interfaces with an LLM API to generate responses as Kasane Teto.
-
-  Configuration keys under `:teto_bot`:
-    - `:llm_model_name`: LLM model name (default: "grok-3-mini")
-    - `:llm_sys_prompt`: System prompt defining Teto's personality (default: see below)
-    - `:llm_max_words`: Maximum words in response (default: 50)
+  Main interface for LLM functionality. Coordinates between different modules.
   """
 
   require Logger
-
-  alias TetoBot.Intimacy
-  alias OpenaiEx.MsgContent
-  alias OpenaiEx.Chat
-  alias OpenaiEx.ChatMessage
-
-  alias TetoBot.LLM
+  alias TetoBot.LLM.{Client, MessageBuilder, ToolProcessor}
 
   @doc """
   Creates an OpenaiEx client using environment variables for API key and base URL.
   """
-  # @spec get_client() :: OpenaiEx.t()
-  def get_client do
-    apikey = System.fetch_env!("LLM_API_KEY")
-    base_url = System.fetch_env!("LLM_BASE_URL")
-
-    OpenaiEx.new(apikey)
-    |> OpenaiEx.with_base_url(base_url)
-    |> OpenaiEx.with_receive_timeout(30_000)
-  end
+  defdelegate get_client(), to: Client
 
   @doc """
-  Generates a response from the LLM using the conversation context.
+  Generates a response from the LLM using the conversation context, with support for tool calling.
   """
-  def generate_response!(openai, context) do
-    messages = Map.get(context, :messages, [])
-    guild_id = Map.get(context, :guild_id)
-    user_id = Map.get(context, :user_id)
-
-    intimacy = fetch_intimacy(guild_id, user_id)
-    tier = Intimacy.get_tier(intimacy)
-
-    {:ok, sys_prompt} = LLM.Context.get_system_prompt()
-
-    sys_prompt =
-      """
-      Your responses should reflect your intimacy level with the user, determined by their tier: #{tier} (Score: #{intimacy}).\n
-      """ <> sys_prompt
-
-    model_name = Application.get_env(:teto_bot, :llm_model_name, "grok-3-mini")
-    max_words = Application.get_env(:teto_bot, :llm_max_words, 50)
-
-    # LLM configuration
-    temperature = Application.get_env(:teto_bot, :llm_temperature, 0.7)
-    top_p = Application.get_env(:teto_bot, :llm_top_p, 0.9)
-    top_k = Application.get_env(:teto_bot, :llm_top_k, 40)
-
-    messages_for_llm =
-      [
-        ChatMessage.system(sys_prompt <> "\nKeep responses under #{max_words} words.")
-        | Enum.map(messages, fn
-            {:user, username, content} ->
-              ChatMessage.user("from " <> username <> ": " <> content)
-
-            {:assistant, _username, content} ->
-              ChatMessage.assistant(content)
-          end)
-      ]
-
-    chat_req =
-      Chat.Completions.new(
-        model: model_name,
-        messages: messages_for_llm,
-        temperature: temperature,
-        top_p: top_p,
-        top_k: top_k
-      )
-
-    case Chat.Completions.create(openai, chat_req) do
-      {:ok,
-       %{
-         "choices" =>
-           [%{"message" => %{"content" => content}} | _] =
-               _resp
-       }} ->
-        Logger.info("Response from LLM: #{content}")
-        content
-
-      {:error, error} ->
-        Logger.error("LLM API error: #{inspect(error)}")
+  def generate_response!(client, context) do
+    with {:ok, messages} <- MessageBuilder.build_chat_messages(context),
+         {:ok, response} <- create_standard_completion(client, messages) do
+      process_llm_response(client, response, messages)
+    else
+      {:error, reason} ->
+        Logger.error("Failed to generate response: #{inspect(reason)}")
         raise RuntimeError, message: "Failed to generate response from LLM"
     end
   end
 
   @doc """
   Generates a text summary of an image.
-
-  ## Parameters
-    - openai: OpenaiEx client
-    - image_url: URL of the image to summarize
-
-  ## Returns
-    - {:ok, summary} if successful
-    - {:error, reason} if the summarization fails
   """
-  def summarize_image(openai, image_url) do
-    vision_model = Application.get_env(:teto_bot, :llm_vision_model_name, "grok-2-vision-latest")
+  def summarize_image(client, image_url) do
+    messages = MessageBuilder.build_vision_messages(image_url)
+    chat_req = Client.build_chat_request(messages, :vision)
 
-    messages = [
-      ChatMessage.user([
-        %{
-          type: "image_url",
-          # Library needs to update, i ll make a PR if no one made one already..
-          image_url: %{
-            url: image_url,
-            detail: "high"
-          }
-        },
-        MsgContent.text(
-          "Summarize this image, try to identify whether the character is Kasane Teto,
-           and reply in the format of 'User uploaded a image...' "
-        )
-      ])
-    ]
-
-    chat_req =
-      Chat.Completions.new(
-        model: vision_model,
-        messages: messages,
-        temperature: 0.01
-      )
-
-    case Chat.Completions.create(openai, chat_req) do
-      {:ok, %{"choices" => [%{"message" => %{"content" => summary}} | _]}} ->
+    case Client.create_completion(client, chat_req) do
+      {:ok, %{"choices" => [%{"message" => %{"content" => summary}} | _]}}
+      when is_binary(summary) ->
         {:ok, summary}
+
+      {:ok, response} ->
+        Logger.error("Unexpected vision response format: #{inspect(response)}")
+        {:error, "Unexpected response format"}
 
       {:error, error} ->
         {:error, error}
     end
   end
 
-  ## Private
-  defp fetch_intimacy(guild_id, user_id) do
-    if guild_id && user_id do
-      case TetoBot.Intimacy.get(guild_id, user_id) do
-        {:ok, score} -> score
-        {:error, _} -> 0
-      end
-    else
-      0
+  ## Private functions
+
+  defp create_standard_completion(client, messages) do
+    chat_req = Client.build_chat_request(messages, :standard)
+    Client.create_completion(client, chat_req)
+  end
+
+  defp process_llm_response(client, response, messages) do
+    case response do
+      %{"choices" => [%{"message" => %{"tool_calls" => tool_calls}} | _]} ->
+        ToolProcessor.process_tool_calls(client, tool_calls, messages)
+
+      %{"choices" => [%{"message" => %{"content" => content}} | _]} when is_binary(content) ->
+        Logger.info("Response from LLM: #{content}")
+        content
+
+      _ ->
+        Logger.error("Unexpected response format from LLM: #{inspect(response)}")
+        "I'm sorry, I couldn't process that request."
     end
   end
 end
