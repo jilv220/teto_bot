@@ -85,30 +85,27 @@ defmodule TetoBot.Commands do
 
   @doc """
   Unregisters all global slash commands for the bot.
-
-  ## Returns
-  - `:ok` on success, logs errors if any command unregistration fails.
   """
-  def unregister_commands do
+  def unregister_global_commands do
     case Api.ApplicationCommand.global_commands() do
       {:ok, commands} ->
-        Enum.each(commands, fn command ->
-          case Api.ApplicationCommand.delete_global_command(command.id) do
-            :ok ->
-              Logger.debug("Unregistered global command #{command.name}")
-
-            {:error, reason} ->
-              Logger.error(
-                "Failed to unregister global command #{command.name}: #{inspect(reason)}"
-              )
-          end
-        end)
+        Enum.each(commands, &unregister_single_global_command(&1.id))
 
       {:error, reason} ->
         Logger.error("Failed to fetch global commands: #{inspect(reason)}")
     end
 
     :ok
+  end
+
+  def unregister_single_global_command(command_id) do
+    case Api.ApplicationCommand.delete_global_command(command_id) do
+      :ok ->
+        Logger.debug("Unregistered global command #{command_id}")
+
+      {:error, reason} ->
+        Logger.error("Failed to unregister global command #{command_id}: #{inspect(reason)}")
+    end
   end
 
   @doc """
@@ -124,15 +121,7 @@ defmodule TetoBot.Commands do
     case Api.ApplicationCommand.guild_commands(guild_id) do
       {:ok, commands} ->
         Enum.each(commands, fn command ->
-          case Api.ApplicationCommand.delete_guild_command(guild_id, command.id) do
-            :ok ->
-              Logger.debug("Unregistered command #{command.name} for guild #{guild_id}")
-
-            {:error, reason} ->
-              Logger.error(
-                "Failed to unregister command #{command.name} for guild #{guild_id}: #{inspect(reason)}"
-              )
-          end
+          unregister_single_guild_command(guild_id, command.id)
         end)
 
       {:error, reason} ->
@@ -142,21 +131,26 @@ defmodule TetoBot.Commands do
     :ok
   end
 
+  def unregister_single_guild_command(guild_id, command_id) do
+    case Api.ApplicationCommand.delete_guild_command(guild_id, command_id) do
+      :ok ->
+        Logger.debug("Unregistered command #{command_id} for guild #{guild_id}")
+
+      {:error, reason} ->
+        Logger.error(
+          "Failed to unregister command #{command_id} for guild #{guild_id}: #{inspect(reason)}"
+        )
+    end
+  end
+
   defp register_guild_commands(guilds) do
     dev_guild_id = Application.get_env(:teto_bot, :dev_guild_id)
 
     case Enum.find(guilds, &(&1.id == dev_guild_id)) do
       %{id: guild_id} ->
-        Enum.each(commands(), fn command ->
-          case Api.ApplicationCommand.create_guild_command(guild_id, command) do
-            {:ok, _} ->
-              Logger.debug("Registered command #{command.name} for dev guild #{guild_id}")
-
-            {:error, reason} ->
-              Logger.error(
-                "Failed to register command #{command.name} for dev guild #{guild_id}: #{inspect(reason)}"
-              )
-          end
+        commands()
+        |> Enum.each(fn command ->
+          register_single_guild_command(guild_id, command)
         end)
 
       nil ->
@@ -166,6 +160,18 @@ defmodule TetoBot.Commands do
     end
 
     :ok
+  end
+
+  defp register_single_guild_command(guild_id, command) do
+    case Api.ApplicationCommand.create_guild_command(guild_id, command) do
+      {:ok, _} ->
+        Logger.debug("Registered command #{command.name} for dev guild #{guild_id}")
+
+      {:error, reason} ->
+        Logger.error(
+          "Failed to register command #{command.name} for dev guild #{guild_id}: #{inspect(reason)}"
+        )
+    end
   end
 
   defp register_global_commands do

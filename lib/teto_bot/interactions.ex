@@ -5,13 +5,15 @@ defmodule TetoBot.Interactions do
 
   require Logger
 
-  alias TetoBot.Users
-  alias TetoBot.Interactions.Teto
-  alias Nostrum.Struct.User
-  alias TetoBot.Intimacy
   alias Nostrum.Api
   alias Nostrum.Api.Guild
+  alias Nostrum.Struct.User
   alias Nostrum.Struct.Interaction
+
+  alias TetoBot.Format
+  alias TetoBot.Users
+  alias TetoBot.Interactions.Teto
+  alias TetoBot.Intimacy
   alias TetoBot.Channels
   alias TetoBot.Constants
   alias TetoBot.Commands
@@ -99,20 +101,21 @@ defmodule TetoBot.Interactions do
 
   defp handle_feed(interaction, user_id, guild_id, channel_id) do
     with_whitelisted_channel(interaction, channel_id, fn ->
-      with {:ok, :allowed} <- Users.check_feed_cooldown(guild_id, user_id) do
-        Users.set_feed_cooldown(guild_id, user_id)
-        Intimacy.increment(guild_id, user_id, 5)
-        {:ok, intimacy} = Intimacy.get(guild_id, user_id)
+      case Users.check_feed_cooldown(guild_id, user_id) do
+        {:ok, :allowed} ->
+          Users.set_feed_cooldown(guild_id, user_id)
+          Intimacy.increment(guild_id, user_id, 5)
+          {:ok, intimacy} = Intimacy.get(guild_id, user_id)
 
-        create_response(
-          interaction,
-          "You fed Teto! Your intimacy with her increased by 5.\nCurrent intimacy: #{intimacy}. 💖"
-        )
-      else
-        {:error, time_left} when is_integer(time_left) ->
           create_response(
             interaction,
-            "You've already fed Teto today! Try again in #{format_time_left(time_left)}."
+            "You fed Teto! Your intimacy with her increased by 5.\nCurrent intimacy: #{intimacy}. 💖"
+          )
+
+        {:error, time_left} ->
+          create_response(
+            interaction,
+            "You've already fed Teto today! Try again in #{Format.format_time_left(time_left)}."
           )
       end
     end)
@@ -161,7 +164,7 @@ defmodule TetoBot.Interactions do
   end
 
   defp handle_whitelist(%Interaction{guild_id: guild_id, channel_id: channel_id} = interaction) do
-    if can_manage_channels?(interaction) do
+    with_manage_channels(interaction, fn ->
       case Channels.whitelist_channel(guild_id, channel_id) do
         {:ok, _channel} ->
           create_response(interaction, "Channel <##{channel_id}> whitelisted successfully!",
@@ -170,23 +173,21 @@ defmodule TetoBot.Interactions do
 
         {:error, changeset} ->
           Logger.error("Failed to whitelist channel #{channel_id}: #{inspect(changeset.errors)}")
-          {error_msg, _} = Keyword.get(changeset.errors, :channel_id)
 
-          response_content =
-            if is_binary(error_msg) && String.contains?(error_msg, "has already been taken") do
-              "Channel <##{channel_id}> is already whitelisted."
-            else
-              "Failed to whitelist channel <##{channel_id}>. Please check the logs."
-            end
-
-          create_response(interaction, response_content, ephemeral: true)
+          create_response(interaction, whitelist_error_message(changeset, channel_id),
+            ephemeral: true
+          )
       end
+    end)
+  end
+
+  defp whitelist_error_message(changeset, channel_id) do
+    {error_msg, _} = Keyword.get(changeset.errors, :channel_id)
+
+    if is_binary(error_msg) && String.contains?(error_msg, "has already been taken") do
+      "Channel <##{channel_id}> is already whitelisted."
     else
-      create_response(
-        interaction,
-        "You do not have permission to use this command. Only users with Manage Channels permission can use this command.",
-        ephemeral: true
-      )
+      "Failed to whitelist channel <##{channel_id}>. Please check the logs."
     end
   end
 
@@ -274,17 +275,15 @@ defmodule TetoBot.Interactions do
     end
   end
 
-  # Private Helpers
-
-  defp format_time_left(seconds) do
-    hours = div(seconds, 3600)
-    minutes = div(rem(seconds, 3600), 60)
-    seconds_left = rem(seconds, 60)
-
-    case {hours, minutes, seconds_left} do
-      {0, 0, s} -> "#{s} second#{if s != 1, do: "s", else: ""}"
-      {0, m, s} -> "#{m}m #{s}sec"
-      {h, m, _s} -> "#{h}h #{m}min"
+  def with_manage_channels(interaction, fun) do
+    if can_manage_channels?(interaction) do
+      fun.()
+    else
+      create_response(
+        interaction,
+        "You do not have permission to use this command. Only users with Manage Channels permission can use this command.",
+        ephemeral: true
+      )
     end
   end
 end

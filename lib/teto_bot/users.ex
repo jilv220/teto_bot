@@ -1,4 +1,30 @@
 defmodule TetoBot.Users do
+  @moduledoc """
+  Manages user data and activity tracking for Discord bot functionality.
+
+  This module provides functions to track user interactions and manage cooldowns
+  for various bot features across Discord guilds. It handles the creation and
+  updating of user records and their guild-specific data, such as last interaction
+  timestamps and command cooldowns.
+
+  The module uses database transactions to ensure data consistency when creating
+  or updating user records, and implements a daily cooldown system for certain
+  bot commands like the feed command.
+
+  ## Key Features
+
+  - Track user activity with last interaction timestamps
+  - Manage daily cooldowns for bot commands
+  - Automatic user and guild record creation
+  - Thread-safe database operations using Ecto.Multi
+
+  ## Database Schema
+
+  Works with two main schemas:
+  - `TetoBot.Users.User` - Stores basic user information
+  - `TetoBot.Users.UserGuild` - Stores guild-specific user data including
+    interaction timestamps and cooldowns
+  """
   alias Nostrum.Snowflake
   alias Ecto.Multi
 

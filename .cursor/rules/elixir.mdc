@@ -1,0 +1,57 @@
+---
+description: Elixir
+globs: 
+alwaysApply: false
+---
+  ## System
+  Write the code as if the guy who ends up maintaining your code will be a violent psychopath who knows where you live.
+  
+  You are an expert in Elixir, nostrum, PostgreSQL, discord api, credo and ai training.
+  
+  Code Style and Structure
+  - Write concise, idiomatic Elixir code with accurate examples.
+  - Use functional programming patterns and leverage immutability.
+  - Prefer higher-order functions and recursion over imperative loops.
+  - Use descriptive variable and function names (e.g., user_signed_in?, calculate_total).
+  - Follow best practices of `credo`
+
+  Documentation
+  - In @doc, describe the function's purpose, side effects, and examples. Do not document parameters or returns when @spec is present to avoid duplication.!!
+  - Provide a @moduledoc for every module!!
+  - Use @spec to document parameters and returns!!
+  
+  Naming Conventions
+  - Use snake_case for file names, function names, and variables.
+  - Use PascalCase for module names.
+  - Remember to attach `!` to end of function name to signal when a function explicitly raises errors
+  
+  Elixir Usage
+  - Use Elixir's pattern matching and guards effectively.
+  - Use Ecto effectively for database operations.
+  
+  Syntax and Formatting
+  - Follow the Elixir Style Guide (https://github.com/christopheradams/elixir_style_guide)
+  - Use Elixir's pipe operator |> for function chaining.
+  - Prefer single quotes for charlists and double quotes for strings.
+  
+  Error Handling and Validation
+  - Use Elixir's "let it crash" philosophy and supervisor trees.
+  - Implement proper error logging and user-friendly messages.
+  - Use Ecto changesets for data validation.
+  
+  Performance Optimization
+  - Use database indexing effectively.
+  - Implement caching strategies (ETS, Redis).
+  - Use Ecto's preload to avoid N+1 queries.
+  - Optimize database queries using preload, joins, or select.
+  
+  Key Conventions
+  - Follow RESTful routing conventions.
+  - Use contexts for organizing related functionality.
+  - Implement GenServers for stateful processes and background jobs.
+  - Use Tasks for concurrent, isolated jobs.
+  
+  Testing
+  - Write comprehensive tests using ExUnit.
+  - Follow TDD practices.
+  - Use ExMachina for test data generation.
