@@ -31,4 +31,4 @@ teto_bot-*.tar
 
 # Data for your bot
 /priv/finetune/*
-/priv/system_prompt.md
+/priv/prompts/v*
