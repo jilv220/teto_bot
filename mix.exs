@@ -34,6 +34,7 @@ defmodule TetoBot.MixProject do
       {:postgrex, ">= 0.0.0"},
       {:redix, "~> 1.1"},
       {:castore, ">= 0.0.0"},
+      {:hammer, "~> 7.0"},
       {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
       {:oban, "~> 2.0"},
       {:ex_machina, "~> 2.7", only: :test},
