@@ -23,13 +23,13 @@ defmodule Mix.Tasks.NewPromptVersion do
   def run(args) do
     Mix.Task.run("compile")
 
-    {opts, [version | _], _} =
+    {opts, parsed_args, _} =
       OptionParser.parse(args,
         switches: [from: :string, blank: :boolean],
         aliases: [f: :from, b: :blank]
       )
 
-    if version == nil do
+    if parsed_args == [] do
       Mix.shell().error("Version number is required")
 
       Mix.shell().info(
@@ -38,6 +38,8 @@ defmodule Mix.Tasks.NewPromptVersion do
 
       System.halt(1)
     end
+
+    [version | _] = parsed_args
 
     unless valid_version?(version) do
       Mix.shell().error(
