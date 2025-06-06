@@ -127,30 +127,44 @@ defmodule TetoBot.Interactions do
         create_response(interaction, "No one has earned intimacy with Teto in this guild yet!")
 
       {:ok, entries} ->
-        leaderboard =
-          entries
-          |> Enum.with_index(1)
-          |> Enum.map_join("\n", fn {%{user_id: user_id, intimacy: intimacy}, rank} ->
-            with {:ok, member} <- Api.Guild.member(guild_id, user_id),
-                 {:ok, user} <- Api.User.get(user_id) do
-              maybe_nickname = if member.nick, do: member.nick, else: user.global_name
-              "#{rank}. #{maybe_nickname} - #{intimacy}"
-            else
-              {:error, reason} ->
-                Logger.error(
-                  "Failed to get nickname or global_name for member #{user_id}: #{inspect(reason)}"
-                )
+        # Extract user IDs for batch processing
+        user_ids = Enum.map(entries, & &1.user_id)
 
-                "#{rank}. Unknown - #{intimacy}"
-            end
-          end)
+        # Batch fetch all guild members and users concurrently
+        member_tasks = Task.async(fn -> fetch_guild_members_batch(guild_id, user_ids) end)
+        user_tasks = Task.async(fn -> fetch_users_batch(user_ids) end)
 
-        message = """
-        **Teto's Intimacy Leaderboard (Top 10)**\n
-        #{leaderboard}
-        """
+        # Wait for both batches with timeout
+        try do
+          members_map = Task.await(member_tasks, 2000)
+          users_map = Task.await(user_tasks, 2000)
 
-        create_response(interaction, message)
+          # Build leaderboard entries
+          leaderboard_entries =
+            entries
+            |> Enum.with_index(1)
+            |> Enum.map(fn {%{user_id: user_id, intimacy: intimacy}, rank} ->
+              display_name = get_display_name_from_maps(user_id, members_map, users_map)
+              "#{rank}. #{display_name} - #{intimacy}"
+            end)
+
+          leaderboard = Enum.join(leaderboard_entries, "\n")
+
+          message = """
+          **Teto's Intimacy Leaderboard (Top 10)**
+
+          #{leaderboard}
+          """
+
+          create_response(interaction, message)
+        catch
+          :exit, {:timeout, _} ->
+            create_response(
+              interaction,
+              "The leaderboard is temporarily unavailable due to slow Discord API response. Please try again later.",
+              ephemeral: true
+            )
+        end
 
       {:error, reason} ->
         Logger.error("Failed to fetch leaderboard for guild #{guild_id}: #{inspect(reason)}")
@@ -160,6 +174,63 @@ defmodule TetoBot.Interactions do
           "Failed to retrieve the leaderboard. Please try again later.",
           ephemeral: true
         )
+    end
+  end
+
+  # Batch fetch guild members concurrently
+  defp fetch_guild_members_batch(guild_id, user_ids) do
+    user_ids
+    |> Task.async_stream(
+      fn user_id ->
+        case Api.Guild.member(guild_id, user_id) do
+          {:ok, member} -> {user_id, member}
+          {:error, _} -> {user_id, nil}
+        end
+      end,
+      max_concurrency: 15,
+      timeout: 1500,
+      on_timeout: :kill_task
+    )
+    |> Enum.reduce(%{}, fn
+      {:ok, {user_id, member}}, acc -> Map.put(acc, user_id, member)
+      {:exit, _}, acc -> acc
+    end)
+  end
+
+  # Batch fetch users concurrently
+  defp fetch_users_batch(user_ids) do
+    user_ids
+    |> Task.async_stream(
+      fn user_id ->
+        case Api.User.get(user_id) do
+          {:ok, user} -> {user_id, user}
+          {:error, _} -> {user_id, nil}
+        end
+      end,
+      max_concurrency: 15,
+      timeout: 1500,
+      on_timeout: :kill_task
+    )
+    |> Enum.reduce(%{}, fn
+      {:ok, {user_id, user}}, acc -> Map.put(acc, user_id, user)
+      {:exit, _}, acc -> acc
+    end)
+  end
+
+  # Get display name from the pre-fetched maps
+  defp get_display_name_from_maps(user_id, members_map, users_map) do
+    # Try nickname from guild member first
+    case Map.get(members_map, user_id) do
+      %{nick: nick} when not is_nil(nick) ->
+        nick
+
+      _ ->
+        # Fall back to user global name or username
+        case Map.get(users_map, user_id) do
+          %{global_name: global_name} when not is_nil(global_name) -> global_name
+          %{username: username} when not is_nil(username) -> username
+          _ -> "User##{user_id}"
+        end
     end
   end
 
