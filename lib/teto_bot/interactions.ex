@@ -134,10 +134,8 @@ defmodule TetoBot.Interactions do
         member_tasks = Task.async(fn -> fetch_guild_members_batch(guild_id, user_ids) end)
         user_tasks = Task.async(fn -> fetch_users_batch(user_ids) end)
 
-        # Wait for both batches with timeout
         try do
-          members_map = Task.await(member_tasks, 2000)
-          users_map = Task.await(user_tasks, 2000)
+          [members_map, users_map] = Task.await_many([member_tasks, user_tasks], 2000)
 
           # Build leaderboard entries
           leaderboard_entries =
