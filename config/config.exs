@@ -36,9 +36,9 @@ config :teto_bot,
   llm_model_name: "meta-llama/llama-4-maverick-17b-128e-instruct",
   llm_vision_model_name: "meta-llama/llama-4-maverick-17b-128e-instruct",
   llm_max_words: 100,
-  llm_temperature: 0.7,
+  llm_temperature: 0.8,
   llm_top_p: 1,
-  llm_top_k: 40
+  llm_top_k: 45
 
 config :teto_bot, TetoBot.Intimacy.Decay,
   inactivity_threshold: :timer.hours(24 * 3),

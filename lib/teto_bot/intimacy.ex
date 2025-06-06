@@ -71,6 +71,30 @@ defmodule TetoBot.Intimacy do
       :ok
   """
   def increment(guild_id, user_id, increment) do
+    case get(guild_id, user_id) do
+      {:ok, current_score} ->
+        set(guild_id, user_id, current_score + increment)
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  @spec set(integer(), integer(), integer()) :: :ok
+  @doc """
+  Sets a user's intimacy score to a specific value in a guild's leaderboard.
+  Performs an atomic operation to update the intimacy score and record the user's last interaction timestamp.
+
+  Creates a new user_guild record if the user doesn't have one for this guild yet.
+
+  ## Side Effects
+  - Updates the user's last interaction timestamp via `TetoBot.Users.update_last_interaction/2`
+
+  ## Examples
+      iex> TetoBot.Intimacy.set(12345, 67890, 75)
+      :ok
+  """
+  def set(guild_id, user_id, value) do
     now = DateTime.utc_now()
 
     case Repo.get_by(UserGuild, guild_id: guild_id, user_id: user_id) do
@@ -81,16 +105,89 @@ defmodule TetoBot.Intimacy do
         from(ug in UserGuild,
           where: ug.guild_id == ^guild_id and ug.user_id == ^user_id
         )
-        |> Repo.update_all(set: [intimacy: increment, last_interaction: now])
+        |> Repo.update_all(set: [intimacy: value, last_interaction: now])
 
-      %UserGuild{intimacy: current_score} ->
+      %UserGuild{intimacy: _current_score} ->
         from(ug in UserGuild,
           where: ug.guild_id == ^guild_id and ug.user_id == ^user_id
         )
-        |> Repo.update_all(set: [intimacy: current_score + increment, last_interaction: now])
+        |> Repo.update_all(set: [intimacy: value, last_interaction: now])
     end
 
     :ok
+  end
+
+  @spec set_relationship(integer(), integer(), keyword()) ::
+          :ok | {:error, :invalid_tier | :missing_options}
+  @doc """
+  Sets a user's intimacy score based on relationship tier or specific value.
+  Useful for testing and administrative purposes.
+
+  ## Options
+  - `:tier` - Set to a specific tier name (string or atom)
+  - `:to` - Set to a specific intimacy value (integer)
+
+  ## Examples
+      iex> TetoBot.Intimacy.set_relationship(12345, 67890, tier: "Friend")
+      :ok
+
+      iex> TetoBot.Intimacy.set_relationship(12345, 67890, tier: :stranger)
+      :ok
+
+      iex> TetoBot.Intimacy.set_relationship(12345, 67890, to: 75)
+      :ok
+
+      iex> TetoBot.Intimacy.set_relationship(12345, 67890, tier: "Invalid")
+      {:error, :invalid_tier}
+  """
+  def set_relationship(guild_id, user_id, opts) do
+    cond do
+      Keyword.has_key?(opts, :tier) ->
+        tier = Keyword.get(opts, :tier)
+        tier_name = if is_atom(tier), do: normalize_tier_atom(tier), else: tier
+
+        case get_tier_value(tier_name) do
+          {:ok, value} ->
+            set(guild_id, user_id, value)
+            :ok
+
+          {:error, _} = error ->
+            error
+        end
+
+      Keyword.has_key?(opts, :to) ->
+        value = Keyword.get(opts, :to)
+        set(guild_id, user_id, value)
+        :ok
+
+      true ->
+        {:error, :missing_options}
+    end
+  end
+
+  @spec get_tier_value(String.t()) :: {:ok, integer()} | {:error, :invalid_tier}
+  defp get_tier_value(tier_name) do
+    tier_values = %{
+      "Stranger" => 0,
+      "Acquaintance" => 11,
+      "Friend" => 51,
+      "Close Friend" => 101
+    }
+
+    case Map.get(tier_values, tier_name) do
+      nil -> {:error, :invalid_tier}
+      value -> {:ok, value}
+    end
+  end
+
+  defp normalize_tier_atom(tier_atom) do
+    case tier_atom do
+      :stranger -> "Stranger"
+      :acquaintance -> "Acquaintance"
+      :friend -> "Friend"
+      :close_friend -> "Close Friend"
+      _ -> to_string(tier_atom)
+    end
   end
 
   @spec get_leaderboard(integer(), integer()) :: {:ok, list()} | {:error, term()}
