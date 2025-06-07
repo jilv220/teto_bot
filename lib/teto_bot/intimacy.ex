@@ -56,7 +56,6 @@ defmodule TetoBot.Intimacy do
     end
   end
 
-  @spec increment(integer(), integer(), integer()) :: :ok
   @doc """
   Increments a user's intimacy score in a guild's leaderboard.
   Performs an atomic operation to update the intimacy score and record the user's last interaction timestamp.

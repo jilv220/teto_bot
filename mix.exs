@@ -35,8 +35,9 @@ defmodule TetoBot.MixProject do
       {:redix, "~> 1.1"},
       {:castore, ">= 0.0.0"},
       {:hammer, "~> 7.0"},
-      {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
+      {:mime, "~> 2.0"},
       {:oban, "~> 2.0"},
+      {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
       {:ex_machina, "~> 2.7", only: :test},
       {:mox, "~> 1.1", only: :test}
     ]

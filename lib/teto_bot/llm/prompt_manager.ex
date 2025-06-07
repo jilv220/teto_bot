@@ -32,8 +32,7 @@ defmodule TetoBot.LLM.PromptManager do
       {:ok, files} ->
         versions =
           files
-          |> Enum.filter(&String.ends_with?(&1, ".md"))
-          |> Enum.filter(&valid_version_format?/1)
+          |> Enum.filter(&(String.ends_with?(&1, ".md") and valid_version_format?(&1)))
           |> Enum.map(&parse_version/1)
           |> Enum.sort(&version_compare/2)
           |> Enum.reverse()

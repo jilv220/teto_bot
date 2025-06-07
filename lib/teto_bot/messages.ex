@@ -15,6 +15,7 @@ defmodule TetoBot.Messages do
 
   alias TetoBot.Intimacy
   alias TetoBot.LLM
+  alias TetoBot.Messages
   alias TetoBot.RateLimiter
 
   @spec handle_msg(Nostrum.Struct.Message.t()) :: :ok
@@ -80,63 +81,66 @@ defmodule TetoBot.Messages do
   @spec generate_and_send_response!(Nostrum.Struct.Message.t()) :: :ok
   @doc false
   # Generates and sends a response using LLM, handling image attachments and updating metrics.
-  defp generate_and_send_response!(
-         %Struct.Message{
-           author: %Struct.User{username: username, id: user_id},
-           content: content,
-           attachments: attachments,
-           channel_id: channel_id,
-           guild_id: guild_id,
-           id: message_id
-         } = msg
-       ) do
-    Logger.info("New msg from #{username}: #{inspect(content)}")
+  defp generate_and_send_response!(msg) do
+    %Struct.Message{
+      author: %Struct.User{username: username, id: user_id},
+      channel_id: channel_id,
+      guild_id: guild_id,
+      id: message_id
+    } = msg
 
-    openai = LLM.get_client()
+    Logger.info("New msg from #{username}: #{inspect(msg.content)}")
 
-    # Handle image attachments
-    attachments = attachments || []
+    msg
+    |> Messages.Attachment.process_attachments()
+    |> build_message_context(guild_id, user_id, channel_id)
+    |> generate_llm_response()
+    |> send_discord_response(channel_id, message_id)
+    |> update_user_intimacy!(guild_id, user_id)
+  end
 
-    if length(attachments) > 0 do
-      # Only process first attachment to save tokens
-      [%Struct.Message.Attachment{url: url} | _] = attachments
-      Logger.info("Image url: #{url}")
-
-      case LLM.summarize_image(openai, url) do
-        {:ok, image_summary} ->
-          Logger.debug("Image summary: #{inspect(image_summary)}")
-          # Attach content field with image summary, then update the cache
-          update_payload = %{
-            id: msg.id,
-            content: content <> " Image attachment: " <> image_summary
-          }
-
-          MessageCache.Mnesia.update(update_payload)
-
-        {:error, reason} ->
-          Logger.error("Failed to summarize image: #{inspect(reason)}")
-          Api.Message.create(channel_id, content: "Failed to process the image. Try again later.")
-      end
-    end
-
-    # Build context map
+  @doc false
+  # Builds context map for LLM processing
+  defp build_message_context(msg, guild_id, user_id, channel_id) do
     context = %{
       messages: TetoBot.MessageContext.get_context(channel_id),
       guild_id: guild_id,
       user_id: user_id
     }
 
-    response = openai |> LLM.generate_response!(context)
+    {msg, context}
+  end
 
+  @doc false
+  # Generates LLM response using the built context
+  defp generate_llm_response({msg, context}) do
+    openai = LLM.get_client()
+    response = openai |> LLM.generate_response!(context)
+    {msg, response}
+  end
+
+  @doc false
+  # Sends the response to Discord via API
+  defp send_discord_response({msg, response}, channel_id, message_id) do
     {:ok, _} =
       Api.Message.create(channel_id,
         content: response,
         message_reference: %{message_id: message_id}
       )
 
-    Intimacy.increment(guild_id, user_id, 1)
+    {msg, response}
+  end
 
-    :ok
+  @doc false
+  # Updates user intimacy after successful interaction
+  defp update_user_intimacy!({_msg, _response}, guild_id, user_id) do
+    case Intimacy.increment(guild_id, user_id, 1) do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        raise RuntimeError, message: "Failed to update user intimacy: #{inspect(reason)}"
+    end
   end
 
   @spec send_rate_limit_warning(integer()) :: :ok

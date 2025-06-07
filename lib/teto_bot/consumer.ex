@@ -48,11 +48,19 @@ defmodule TetoBot.Consumer do
         Messages.handle_msg(msg)
       rescue
         e in RuntimeError ->
-          Logger.error("Text generation error: #{inspect(e)}")
+          Logger.error("Message processing error: #{inspect(e)}")
 
-          Api.Message.create(msg.channel_id,
-            content: "Oops, something went wrong! Try again, okay?"
-          )
+          cond do
+            String.starts_with?(e.message, "Audio attachment are not supported: ") ->
+              Api.Message.create(msg.channel_id,
+                content: "Voice messages are not supported yet"
+              )
+
+            true ->
+              Api.Message.create(msg.channel_id,
+                content: "Oops, something went wrong! Try again, okay?"
+              )
+          end
 
           :ok
       end
