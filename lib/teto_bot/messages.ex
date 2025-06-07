@@ -145,7 +145,7 @@ defmodule TetoBot.Messages do
   @doc false
   # Updates user intimacy after successful interaction
   defp update_user_intimacy!({_msg, _response}, guild_id, user_id) do
-    Intimacy.increment(guild_id, user_id, 1)
+    Intimacy.increment(guild_id, user_id, 1, update_message_at: true)
   end
 
   @spec send_rate_limit_warning(integer()) :: :ok

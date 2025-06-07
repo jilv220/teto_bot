@@ -71,37 +71,52 @@ defmodule TetoBot.Intimacy do
 
   @doc """
   Increments a user's intimacy score in a guild's leaderboard.
-  Performs an atomic operation to update the intimacy score and record the user's last interaction timestamp.
+  Performs an atomic operation to update the intimacy score.
 
-  Creates a new user_guild record if the user doesn't have one for this guild yet.
+  By default, it does **not** update the user's last message timestamp.
+  This is suitable for interactions that are not messages (e.g., using the `/feed` command).
 
-  ## Side Effects
-  - Updates the user's last interaction timestamp via `TetoBot.Users.update_last_message_at!/2`
+  To also update the `last_message_at` timestamp, which should be done for actual messages,
+  pass `update_message_at: true` in the options.
+
+  ## Options
+  - `update_message_at`: (boolean) When `true`, updates the `last_message_at` timestamp. Defaults to `false`.
 
   ## Examples
       iex> TetoBot.Intimacy.increment(12345, 67890, 10)
       :ok
+
+      iex> TetoBot.Intimacy.increment(12345, 67890, 1, update_message_at: true)
+      :ok
   """
-  def increment(guild_id, user_id, increment) do
-    atomic_update(guild_id, user_id, inc: [intimacy: increment])
+  def increment(guild_id, user_id, increment, opts \\ []) do
+    updates = [inc: [intimacy: increment]]
+    atomic_update(guild_id, user_id, updates, opts)
   end
 
-  @spec set(integer(), integer(), integer()) :: :ok
+  @spec set(integer(), integer(), integer(), keyword()) :: :ok
   @doc """
   Sets a user's intimacy score to a specific value in a guild's leaderboard.
-  Performs an atomic operation to update the intimacy score and record the user's last interaction timestamp.
+  Performs an atomic operation to update the intimacy score.
 
-  Creates a new user_guild record if the user doesn't have one for this guild yet.
+  By default, it does **not** update the user's last message timestamp.
+  This is suitable for interactions that are not messages (e.g., using the `/feed` command).
 
-  ## Side Effects
-  - Updates the user's last interaction timestamp via `TetoBot.Users.update_last_message_at/2`
+  To also update the `last_message_at` timestamp, which should be done for actual messages,
+  pass `update_message_at: true` in the options.
+
+  ## Options
+  - `update_message_at`: (boolean) When `true`, updates the `last_message_at` timestamp. Defaults to `false`.
 
   ## Examples
       iex> TetoBot.Intimacy.set(12345, 67890, 75)
       :ok
+
+      iex> TetoBot.Intimacy.set(12345, 67890, 75, update_message_at: true)
+      :ok
   """
-  def set(guild_id, user_id, value) do
-    atomic_update(guild_id, user_id, set: [intimacy: value])
+  def set(guild_id, user_id, value, opts \\ []) do
+    atomic_update(guild_id, user_id, [set: [intimacy: value]], opts)
   end
 
   @spec set_relationship(integer(), integer(), keyword()) ::
@@ -287,15 +302,19 @@ defmodule TetoBot.Intimacy do
   end
 
   @doc false
-  defp atomic_update(guild_id, user_id, updates) do
+  defp atomic_update(guild_id, user_id, updates, opts) do
     ensure_user_guild_exists(guild_id, user_id)
 
     now = DateTime.utc_now()
 
     updates =
-      Keyword.update(updates, :set, [last_message_at: now], fn set_opts ->
-        Keyword.put(set_opts, :last_message_at, now)
-      end)
+      if Keyword.get(opts, :update_message_at, false) do
+        Keyword.update(updates, :set, [last_message_at: now], fn set_opts ->
+          Keyword.put(set_opts, :last_message_at, now)
+        end)
+      else
+        updates
+      end
 
     from(ug in UserGuild,
       where: ug.guild_id == ^guild_id and ug.user_id == ^user_id
