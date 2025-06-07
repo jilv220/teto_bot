@@ -23,6 +23,19 @@ defmodule TetoBot.Intimacy do
 
   require Logger
 
+  @intimacy_tiers [
+    {1000, "Husband"},
+    {500, "Best Friend"},
+    {200, "Close Friend"},
+    {101, "Good Friend"},
+    {51, "Friend"},
+    {21, "Buddy"},
+    {11, "Acquaintance"},
+    {5, "Familiar Face"},
+    {0, "Stranger"}
+  ]
+  @tier_values Map.new(@intimacy_tiers, fn {value, name} -> {name, value} end)
+
   @spec get(integer(), integer()) ::
           {:ok, integer()} | {:error, term()}
   @doc """
@@ -70,13 +83,7 @@ defmodule TetoBot.Intimacy do
       :ok
   """
   def increment(guild_id, user_id, increment) do
-    case get(guild_id, user_id) do
-      {:ok, current_score} ->
-        set(guild_id, user_id, current_score + increment)
-
-      {:error, _} = error ->
-        error
-    end
+    atomic_update(guild_id, user_id, inc: [intimacy: increment])
   end
 
   @spec set(integer(), integer(), integer()) :: :ok
@@ -94,26 +101,7 @@ defmodule TetoBot.Intimacy do
       :ok
   """
   def set(guild_id, user_id, value) do
-    now = DateTime.utc_now()
-
-    case Repo.get_by(UserGuild, guild_id: guild_id, user_id: user_id) do
-      nil ->
-        # Create the user_guild record with intimacy score and last_interaction
-        Users.update_last_interaction(guild_id, user_id)
-
-        from(ug in UserGuild,
-          where: ug.guild_id == ^guild_id and ug.user_id == ^user_id
-        )
-        |> Repo.update_all(set: [intimacy: value, last_interaction: now])
-
-      %UserGuild{intimacy: _current_score} ->
-        from(ug in UserGuild,
-          where: ug.guild_id == ^guild_id and ug.user_id == ^user_id
-        )
-        |> Repo.update_all(set: [intimacy: value, last_interaction: now])
-    end
-
-    :ok
+    atomic_update(guild_id, user_id, set: [intimacy: value])
   end
 
   @spec set_relationship(integer(), integer(), keyword()) ::
@@ -140,24 +128,21 @@ defmodule TetoBot.Intimacy do
       {:error, :invalid_tier}
   """
   def set_relationship(guild_id, user_id, opts) do
+    case get_intimacy_value_from_opts(opts) do
+      {:ok, value} -> set(guild_id, user_id, value)
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  @doc false
+  defp get_intimacy_value_from_opts(opts) do
     cond do
-      Keyword.has_key?(opts, :tier) ->
-        tier = Keyword.get(opts, :tier)
+      tier = opts[:tier] ->
         tier_name = if is_atom(tier), do: normalize_tier_atom(tier), else: tier
+        get_tier_value(tier_name)
 
-        case get_tier_value(tier_name) do
-          {:ok, value} ->
-            set(guild_id, user_id, value)
-            :ok
-
-          {:error, _} = error ->
-            error
-        end
-
-      Keyword.has_key?(opts, :to) ->
-        value = Keyword.get(opts, :to)
-        set(guild_id, user_id, value)
-        :ok
+      value = opts[:to] ->
+        {:ok, value}
 
       true ->
         {:error, :missing_options}
@@ -166,14 +151,7 @@ defmodule TetoBot.Intimacy do
 
   @spec get_tier_value(String.t()) :: {:ok, integer()} | {:error, :invalid_tier}
   defp get_tier_value(tier_name) do
-    tier_values = %{
-      "Stranger" => 0,
-      "Acquaintance" => 11,
-      "Friend" => 51,
-      "Close Friend" => 101
-    }
-
-    case Map.get(tier_values, tier_name) do
+    case Map.get(@tier_values, tier_name) do
       nil -> {:error, :invalid_tier}
       value -> {:ok, value}
     end
@@ -232,10 +210,8 @@ defmodule TetoBot.Intimacy do
       "Stranger"
   """
   def get_tier(intimacy) do
-    intimacy_list = [{101, "Close Friend"}, {51, "Friend"}, {11, "Acquaintance"}, {0, "Stranger"}]
-
     {_, intimacy_tier} =
-      intimacy_list
+      @intimacy_tiers
       |> Enum.find(fn {k, _v} -> intimacy >= k end)
 
     intimacy_tier
@@ -250,14 +226,12 @@ defmodule TetoBot.Intimacy do
       {{25, "Acquaintance"}, {51, "Friend"}}
   """
   def get_tier_info(intimacy) do
-    intimacy_list = [{101, "Close Friend"}, {51, "Friend"}, {11, "Acquaintance"}, {0, "Stranger"}]
-
     curr_intimacy_idx =
-      intimacy_list
+      @intimacy_tiers
       |> Enum.find_index(fn {k, _v} -> intimacy >= k end)
 
     {_, curr_intimacy_tier} =
-      intimacy_list
+      @intimacy_tiers
       |> Enum.at(curr_intimacy_idx)
 
     next_tier_intimacy_entry =
@@ -265,7 +239,7 @@ defmodule TetoBot.Intimacy do
         # Already at highest tier, return same tier
         {intimacy, curr_intimacy_tier}
       else
-        intimacy_list |> Enum.at(curr_intimacy_idx - 1)
+        @intimacy_tiers |> Enum.at(curr_intimacy_idx - 1)
       end
 
     {{intimacy, curr_intimacy_tier}, next_tier_intimacy_entry}
@@ -299,5 +273,35 @@ defmodule TetoBot.Intimacy do
         Logger.error("Failed to get inactive users for guild #{guild_id}: #{inspect(error)}")
         {:error, error}
     end
+  end
+
+  # Private Helpers
+
+  @doc false
+  defp ensure_user_guild_exists(guild_id, user_id) do
+    query = from(ug in UserGuild, where: ug.guild_id == ^guild_id and ug.user_id == ^user_id)
+
+    unless Repo.exists?(query) do
+      Users.update_last_interaction(guild_id, user_id)
+    end
+  end
+
+  @doc false
+  defp atomic_update(guild_id, user_id, updates) do
+    ensure_user_guild_exists(guild_id, user_id)
+
+    now = DateTime.utc_now()
+
+    updates =
+      Keyword.update(updates, :set, [last_interaction: now], fn set_opts ->
+        Keyword.put(set_opts, :last_interaction, now)
+      end)
+
+    from(ug in UserGuild,
+      where: ug.guild_id == ^guild_id and ug.user_id == ^user_id
+    )
+    |> Repo.update_all(updates)
+
+    :ok
   end
 end

@@ -145,13 +145,7 @@ defmodule TetoBot.Messages do
   @doc false
   # Updates user intimacy after successful interaction
   defp update_user_intimacy!({_msg, _response}, guild_id, user_id) do
-    case Intimacy.increment(guild_id, user_id, 1) do
-      :ok ->
-        :ok
-
-      {:error, reason} ->
-        raise RuntimeError, message: "Failed to update user intimacy: #{inspect(reason)}"
-    end
+    Intimacy.increment(guild_id, user_id, 1)
   end
 
   @spec send_rate_limit_warning(integer()) :: :ok

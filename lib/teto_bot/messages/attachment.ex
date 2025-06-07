@@ -8,7 +8,7 @@ defmodule TetoBot.Messages.Attachment do
   alias Nostrum.Struct
   alias TetoBot.LLM
 
-  def is_image?(filename) do
+  def image?(filename) do
     MIME.from_path(filename) in [
       "image/jpeg",
       "image/jpg",
@@ -19,7 +19,7 @@ defmodule TetoBot.Messages.Attachment do
     ]
   end
 
-  def is_audio?(filename) do
+  def audio?(filename) do
     MIME.from_path(filename) in [
       "audio/mpeg",
       "audio/mp3",
@@ -43,10 +43,10 @@ defmodule TetoBot.Messages.Attachment do
 
       [%Struct.Message.Attachment{url: url, filename: filename} | _] ->
         cond do
-          is_image?(filename) ->
+          image?(filename) ->
             handle_image_attachment(msg, url)
 
-          is_audio?(filename) ->
+          audio?(filename) ->
             handle_audio_attachment(filename)
 
           true ->
