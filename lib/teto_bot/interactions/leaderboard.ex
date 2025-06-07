@@ -9,7 +9,7 @@ defmodule TetoBot.Interactions.Leaderboard do
   alias TetoBot.Intimacy
   alias TetoBot.Interactions.Responses
 
-  @max_concurrency 10
+  @max_concurrency 20
   @api_timeout 2000
   @task_timeout 1500
 
