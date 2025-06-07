@@ -30,8 +30,8 @@ config :teto_bot,
   generators: [timestamp_type: :utc_datetime],
   # Rate limiting
   rate_limit_window: 60,
-  rate_limit_max_requests: 10,
-  context_window: 1800,
+  rate_limit_max_requests: 5,
+  context_window: 900,
   # Bot settings
   llm_model_name: "meta-llama/llama-4-maverick-17b-128e-instruct",
   llm_vision_model_name: "meta-llama/llama-4-maverick-17b-128e-instruct",

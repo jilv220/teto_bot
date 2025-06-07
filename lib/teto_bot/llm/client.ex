@@ -37,7 +37,8 @@ defmodule TetoBot.LLM.Client do
       top_p: config.llm_top_p,
       top_k: config.llm_top_k,
       tools: TetoBot.LLM.Tools.tools(),
-      tool_choice: "auto"
+      tool_choice: "auto",
+      max_tokens: 30_000
     )
   end
 
