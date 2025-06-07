@@ -22,44 +22,55 @@ defmodule TetoBot.Messages do
   @doc """
   Handles an incoming Discord message, determining if it should be processed and executing the appropriate action.
   """
-  def handle_msg(%Struct.Message{author: %Struct.User{id: author_id}} = msg) do
-    bot_id = Bot.get_bot_name()
+  def handle_msg(%Struct.Message{author: %Struct.User{bot: bot}} = msg) do
+    my_bot_id = Bot.get_bot_name()
 
     msg
-    |> should_process_message?(author_id, bot_id)
-    |> maybe_process_message(msg, bot_id)
+    |> should_process_message?(bot, my_bot_id)
+    |> maybe_process_message(msg, my_bot_id)
   end
 
-  defp should_process_message?(_msg, author_id, bot_id) when author_id == bot_id,
+  # Skip all bot's messages, including other bots as well
+  defp should_process_message?(_msg, bot, _my_bot_id) when bot == true,
     do: {:skip, :bot_message}
 
-  defp should_process_message?(%Struct.Message{message_reference: nil}, _author_id, _bot_id),
+  defp should_process_message?(%Struct.Message{message_reference: nil}, _bot, _my_bot_id),
     do: {:process, :direct}
 
   defp should_process_message?(
          %Struct.Message{message_reference: %{message_id: replied_msg_id}},
-         _author_id,
-         bot_id
+         _bot,
+         my_bot_id
        ) do
     case MessageCache.get(replied_msg_id) do
-      {:ok, replied_to_msg} -> check_reply_target(replied_to_msg, bot_id, replied_msg_id)
+      {:ok, replied_to_msg} -> check_reply_target(replied_to_msg, my_bot_id, replied_msg_id)
       {:error, reason} -> {:error, reason, replied_msg_id}
     end
   end
 
-  defp check_reply_target(replied_to_msg, bot_id, replied_msg_id) do
-    if replied_to_msg.author.id == bot_id do
-      {:process, :reply_to_bot}
-    else
-      {:skip, {:reply_to_user, replied_msg_id}}
+  defp check_reply_target(replied_to_msg, my_bot_id, replied_msg_id) do
+    cond do
+      replied_to_msg.author.id == my_bot_id ->
+        {:process, :reply_to_my_bot}
+
+      replied_to_msg.author.bot ->
+        {:skip, {:reply_to_other_bot, replied_msg_id}}
+
+      true ->
+        {:skip, {:reply_to_user, replied_msg_id}}
     end
   end
 
   defp maybe_process_message({:process, _reason}, msg, _bot_id), do: process_message(msg)
   defp maybe_process_message({:skip, :bot_message}, _msg, _bot_id), do: :ok
 
+  defp maybe_process_message({:skip, {:reply_to_other_bot, replied_msg_id}}, _msg, _bot_id) do
+    Logger.debug("Ignoring reply to other bot message: #{replied_msg_id}")
+    :ok
+  end
+
   defp maybe_process_message({:skip, {:reply_to_user, replied_msg_id}}, _msg, _bot_id) do
-    Logger.debug("Ignoring reply to non-bot message: #{replied_msg_id}")
+    Logger.debug("Ignoring reply to user message: #{replied_msg_id}")
     :ok
   end
 

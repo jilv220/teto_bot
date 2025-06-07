@@ -6,7 +6,7 @@ defmodule TetoBot.Application do
   @impl true
   def start(_type, _args) do
     TetoBot.Release.migrate()
-    Oban.Telemetry.attach_default_logger()
+    # Oban.Telemetry.attach_default_logger()
 
     bot_options = %{
       consumer: TetoBot.Consumer,

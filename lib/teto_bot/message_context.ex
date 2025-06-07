@@ -52,8 +52,6 @@ defmodule TetoBot.MessageContext do
 
     filtered_messages
     |> tap(fn msgs ->
-      IO.inspect(msgs, label: "msgs")
-
       token_count = get_total_token_count(msgs)
       Logger.info("Message context: #{length(msgs)} messages, ~#{token_count} tokens")
     end)
