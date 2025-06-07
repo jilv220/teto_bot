@@ -1,7 +1,7 @@
 defmodule TetoBot.LyricsTest do
   use ExUnit.Case, async: false
   alias TetoBot.Lyrics
-  
+
   setup do
     # Clear Redis before each test
     {:ok, _} = Redix.command(:redix, ["FLUSHALL"])
@@ -25,7 +25,7 @@ defmodule TetoBot.LyricsTest do
     test "returns list of stored lyrics" do
       assert :ok = Lyrics.store_lyrics("Song 1", "Artist 1", "Lyrics 1")
       assert :ok = Lyrics.store_lyrics("Song 2", "Artist 2", "Lyrics 2")
-      
+
       assert {:ok, songs} = Lyrics.list_lyrics()
       assert length(songs) == 2
       assert %{artist: "Artist 1", song: "Song 1"} in songs

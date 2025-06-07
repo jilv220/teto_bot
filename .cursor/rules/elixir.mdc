@@ -1,6 +1,6 @@
 ---
-description: Elixir
-globs: 
+description: 
+globs: *.ex,*.exs
 alwaysApply: false
 ---
   ## System

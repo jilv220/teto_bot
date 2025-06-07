@@ -76,7 +76,7 @@ defmodule TetoBot.Intimacy do
   Creates a new user_guild record if the user doesn't have one for this guild yet.
 
   ## Side Effects
-  - Updates the user's last interaction timestamp via `TetoBot.Users.update_last_interaction!/2`
+  - Updates the user's last interaction timestamp via `TetoBot.Users.update_last_message_at!/2`
 
   ## Examples
       iex> TetoBot.Intimacy.increment(12345, 67890, 10)
@@ -94,7 +94,7 @@ defmodule TetoBot.Intimacy do
   Creates a new user_guild record if the user doesn't have one for this guild yet.
 
   ## Side Effects
-  - Updates the user's last interaction timestamp via `TetoBot.Users.update_last_interaction/2`
+  - Updates the user's last interaction timestamp via `TetoBot.Users.update_last_message_at/2`
 
   ## Examples
       iex> TetoBot.Intimacy.set(12345, 67890, 75)
@@ -185,7 +185,7 @@ defmodule TetoBot.Intimacy do
           select: %{
             user_id: ug.user_id,
             intimacy: ug.intimacy,
-            last_interaction: ug.last_interaction
+            last_message_at: ug.last_message_at
           }
         )
         |> Repo.all()
@@ -257,12 +257,12 @@ defmodule TetoBot.Intimacy do
       inactive_users =
         from(ug in UserGuild,
           where: ug.guild_id == ^guild_id,
-          where: ug.last_interaction < ^cutoff_date or is_nil(ug.last_interaction),
+          where: ug.last_message_at < ^cutoff_date or is_nil(ug.last_message_at),
           where: ug.intimacy > 0,
           select: %{
             user_id: ug.user_id,
             intimacy: ug.intimacy,
-            last_interaction: ug.last_interaction
+            last_message_at: ug.last_message_at
           }
         )
         |> Repo.all()
@@ -282,7 +282,7 @@ defmodule TetoBot.Intimacy do
     query = from(ug in UserGuild, where: ug.guild_id == ^guild_id and ug.user_id == ^user_id)
 
     unless Repo.exists?(query) do
-      Users.update_last_interaction(guild_id, user_id)
+      Users.update_last_message_at(guild_id, user_id)
     end
   end
 
@@ -293,8 +293,8 @@ defmodule TetoBot.Intimacy do
     now = DateTime.utc_now()
 
     updates =
-      Keyword.update(updates, :set, [last_interaction: now], fn set_opts ->
-        Keyword.put(set_opts, :last_interaction, now)
+      Keyword.update(updates, :set, [last_message_at: now], fn set_opts ->
+        Keyword.put(set_opts, :last_message_at, now)
       end)
 
     from(ug in UserGuild,

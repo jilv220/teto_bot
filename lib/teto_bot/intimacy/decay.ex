@@ -43,7 +43,6 @@ defmodule TetoBot.Intimacy.Decay do
   import Ecto.Query
 
   alias TetoBot.Intimacy
-  alias TetoBot.Users
   alias TetoBot.Guilds
   alias Oban
 
@@ -85,7 +84,7 @@ defmodule TetoBot.Intimacy.Decay do
   defp process_guild_decay(guild_id, config) do
     case Guilds.members(guild_id) do
       {:ok, members} ->
-        inactive_members = filter_inactive_members(guild_id, members, config)
+        inactive_members = filter_inactive_members(members, config)
         apply_decay_to_members(guild_id, inactive_members, config)
 
         log_decay_completion(guild_id, members, inactive_members)
@@ -95,22 +94,29 @@ defmodule TetoBot.Intimacy.Decay do
     end
   end
 
-  defp filter_inactive_members(guild_id, members, config) do
+  defp filter_inactive_members(members, config) do
     current_time = System.system_time(:millisecond)
     threshold = current_time - config.inactivity_threshold
 
-    Enum.filter(members, fn %UserGuild{user_id: user_id, intimacy: intimacy} ->
-      intimacy >= config.minimum_intimacy && user_inactive?(guild_id, user_id, threshold)
+    Enum.filter(members, fn member ->
+      member.intimacy >= config.minimum_intimacy &&
+        user_inactive?(member, threshold)
     end)
   end
 
-  defp user_inactive?(guild_id, user_id, threshold) do
-    case Users.get_last_interaction(guild_id, user_id) do
-      {:error, :not_found} ->
-        true
+  @doc false
+  # User is inactive if `:last_message_at` or `:last_feed` is less than threshold
+  defp user_inactive?(member, threshold) do
+    last_interaction =
+      [member.last_message_at, member.last_feed]
+      |> Enum.reject(&is_nil/1)
+      |> Enum.max_by(&DateTime.to_unix(&1), &DateTime.compare/2)
 
-      {:ok, date_time} ->
-        DateTime.to_unix(date_time, :millisecond) < threshold
+    if last_interaction do
+      DateTime.to_unix(last_interaction, :millisecond) < threshold
+    else
+      # If both are nil, the user is considered inactive
+      true
     end
   end
 

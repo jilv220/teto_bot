@@ -87,8 +87,7 @@ defmodule TetoBot.Guilds do
     try do
       result =
         from(ug in UserGuild,
-          where: ug.guild_id == ^guild_id,
-          select: [:user_id, :intimacy]
+          where: ug.guild_id == ^guild_id
         )
         |> @repo.all([])
 

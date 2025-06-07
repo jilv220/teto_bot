@@ -32,40 +32,40 @@ defmodule TetoBot.Users do
   alias TetoBot.Users.{User, UserGuild}
 
   @doc """
-  Gets the last interaction timestamp for a user in a specific guild.
+  Gets the last message timestamp for a user in a specific guild.
   Returns {:error, :not_found} if the user doesn't exist in that guild.
 
   ## Examples
-      iex> TetoBot.Users.get_last_interaction(12345, 67890)
+      iex> TetoBot.Users.get_last_message_at(12345, 67890)
       {:ok, ~U[2025-05-31 10:30:00Z]}
 
-      iex> TetoBot.Users.get_last_interaction(12345, 99999)
+      iex> TetoBot.Users.get_last_message_at(12345, 99999)
       {:error, :not_found}
   """
-  @spec get_last_interaction(integer(), integer()) :: {:ok, DateTime.t()} | {:error, :not_found}
-  def get_last_interaction(guild_id, user_id) do
+  @spec get_last_message_at(integer(), integer()) :: {:ok, DateTime.t()} | {:error, :not_found}
+  def get_last_message_at(guild_id, user_id) do
     case Repo.get_by(UserGuild, guild_id: guild_id, user_id: user_id) do
       nil -> {:error, :not_found}
-      %UserGuild{last_interaction: nil} -> {:error, :not_found}
-      %UserGuild{last_interaction: datetime} -> {:ok, datetime}
+      %UserGuild{last_message_at: nil} -> {:error, :not_found}
+      %UserGuild{last_message_at: datetime} -> {:ok, datetime}
     end
   end
 
   @doc """
-  Updates the last interaction timestamp for a user in a specific guild.
+  Updates the last message timestamp for a user in a specific guild.
   Creates the user and user_guild records if they don't exist.
   Should be called when a user chats or uses commands to track activity.
 
   ## Examples
-      iex> TetoBot.Users.update_last_interaction(12345, 67890)
+      iex> TetoBot.Users.update_last_message_at(12345, 67890)
       {:ok, %UserGuild{}}
 
-      iex> TetoBot.Users.update_last_interaction(invalid_guild_id, invalid_user_id)
+      iex> TetoBot.Users.update_last_message_at(invalid_guild_id, invalid_user_id)
       {:error, %Ecto.Changeset{}}
   """
-  @spec update_last_interaction(Snowflake.t(), Snowflake.t()) ::
+  @spec update_last_message_at(Snowflake.t(), Snowflake.t()) ::
           {:ok, UserGuild} | {:error, Ecto.Changeset.t()}
-  def update_last_interaction(guild_id, user_id) do
+  def update_last_message_at(guild_id, user_id) do
     now = DateTime.utc_now()
 
     Multi.new()
@@ -80,9 +80,9 @@ defmodule TetoBot.Users do
       UserGuild.changeset(%UserGuild{}, %{
         user_id: user_id,
         guild_id: guild_id,
-        last_interaction: now
+        last_message_at: now
       }),
-      on_conflict: [set: [last_interaction: now, updated_at: now]],
+      on_conflict: [set: [last_message_at: now, updated_at: now]],
       conflict_target: [:user_id, :guild_id]
     )
     |> Repo.transaction()
@@ -94,11 +94,11 @@ defmodule TetoBot.Users do
   end
 
   @doc """
-  Same as update_last_interaction/2 but raises on error.
+  Same as update_last_message_at/2 but raises on error.
   """
-  @spec update_last_interaction!(Snowflake.t(), Snowflake.t()) :: UserGuild
-  def update_last_interaction!(guild_id, user_id) do
-    case update_last_interaction(guild_id, user_id) do
+  @spec update_last_message_at!(Snowflake.t(), Snowflake.t()) :: UserGuild
+  def update_last_message_at!(guild_id, user_id) do
+    case update_last_message_at(guild_id, user_id) do
       {:ok, user_guild} -> user_guild
       {:error, changeset} -> raise Ecto.InvalidChangesetError, changeset: changeset
     end
