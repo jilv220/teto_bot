@@ -31,7 +31,7 @@ defmodule TetoBot.Interactions.Teto do
 
   alias TetoBot.Format
   alias TetoBot.Intimacy
-  alias TetoBot.Interactions
+  alias TetoBot.Interactions.{Permissions, Responses}
 
   @spec handle_teto(Struct.Interaction.t()) :: :ok | Nostrum.Api.error()
   @doc """
@@ -48,11 +48,11 @@ defmodule TetoBot.Interactions.Teto do
           channel_id: channel_id
         } = interaction
       ) do
-    Interactions.with_whitelisted_channel(interaction, channel_id, fn ->
+    Permissions.with_whitelisted_channel(interaction, channel_id, fn ->
       case Intimacy.get(guild_id, user_id) do
         {:ok, intimacy} ->
           response = build_intimacy_response(intimacy, guild_id, user_id)
-          Interactions.create_response(interaction, response, ephemeral: true)
+          Responses.success(interaction, response, ephemeral: true)
 
         {:error, reason} ->
           handle_intimacy_error(interaction, reason)
@@ -117,10 +117,9 @@ defmodule TetoBot.Interactions.Teto do
       "Failed to get intimacy info for user #{user_id} in guild #{guild_id}: #{inspect(reason)}"
     )
 
-    Interactions.create_response(
+    Responses.error(
       interaction,
-      "Something went wrong while retrieving user intimacy info. Please try again later.",
-      ephemeral: true
+      "Something went wrong while retrieving user intimacy info. Please try again later."
     )
   end
 end
