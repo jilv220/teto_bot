@@ -9,7 +9,8 @@ defmodule TetoBot.MixProject do
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       consolidate_protocols: Mix.env() != :dev,
-      deps: deps()
+      deps: deps(),
+      aliases: aliases()
     ]
   end
 
@@ -27,6 +28,9 @@ defmodule TetoBot.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:ash_postgres, "~> 2.0"},
+      {:sourceror, "~> 1.8"},
+      {:ash, "~> 3.0"},
       # api has breaking changes... wait for 0.11
       {:nostrum, github: "Kraigie/nostrum"},
       {:openai_ex, "~> 0.9.9"},
@@ -38,9 +42,14 @@ defmodule TetoBot.MixProject do
       {:hammer, "~> 7.0"},
       {:mime, "~> 2.0"},
       {:oban, "~> 2.0"},
+      {:igniter, "~> 0.6", only: [:dev, :test]},
       {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
       {:ex_machina, "~> 2.7", only: :test},
       {:mox, "~> 1.1", only: :test}
     ]
+  end
+
+  defp aliases() do
+    [test: ["ash.setup --quiet", "test"], setup: "ash.setup"]
   end
 end

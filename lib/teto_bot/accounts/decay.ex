@@ -74,15 +74,20 @@ defmodule TetoBot.Accounts.Decay do
   def perform_decay_check_logic(config) do
     Logger.info("Starting intimacy decay check (logic invoked)")
 
-    guild_ids = Guilds.ids()
-    Enum.each(guild_ids, &process_guild_decay(&1, config))
-    Logger.info("Completed decay check (logic invoked) for #{length(guild_ids)} guilds")
+    case Guilds.guild_ids() do
+      {:ok, guild_ids} ->
+        Enum.each(guild_ids, &process_guild_decay(&1, config))
+        Logger.info("Completed decay check (logic invoked) for #{length(guild_ids)} guilds")
+
+      {:error, reason} ->
+        Logger.error("Failed to get guild_ids: #{inspect(reason)}")
+    end
   end
 
   # Private Helper Functions
 
   defp process_guild_decay(guild_id, config) do
-    case Guilds.members(guild_id) do
+    case Guilds.members(guild_id: guild_id) do
       {:ok, members} ->
         inactive_members = filter_inactive_members(members, config)
         apply_decay_to_members(guild_id, inactive_members, config)
