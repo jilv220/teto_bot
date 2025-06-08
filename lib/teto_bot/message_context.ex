@@ -15,6 +15,7 @@ defmodule TetoBot.MessageContext do
   alias Nostrum.Cache.MessageCache
   alias Nostrum.Struct.Message
   alias Nostrum.Bot
+  alias TetoBot.Tokenizer
 
   @doc """
   Retrieves the conversation context for a channel within the time window.
@@ -85,9 +86,7 @@ defmodule TetoBot.MessageContext do
   # Gets the number of tokens in a message.
   @spec get_token_count(String.t()) :: integer()
   defp get_token_count(content) do
-    {:ok, tokenizer} = Tokenizers.Tokenizer.from_pretrained("bert-base-cased")
-    {:ok, encoding} = Tokenizers.Tokenizer.encode(tokenizer, content)
-    Tokenizers.Encoding.n_tokens(encoding)
+    Tokenizer.get_token_count(content)
   end
 
   @doc false

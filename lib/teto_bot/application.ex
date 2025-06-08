@@ -26,6 +26,7 @@ defmodule TetoBot.Application do
       {TetoBot.RateLimiter, [clean_period: :timer.minutes(1)]},
       TetoBot.Guilds.Cache,
       TetoBot.Channels.Cache,
+      TetoBot.Tokenizer,
       {Nostrum.Bot, bot_options}
     ]
 
