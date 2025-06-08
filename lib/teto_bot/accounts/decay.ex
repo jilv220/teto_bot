@@ -1,8 +1,8 @@
-defmodule TetoBot.Intimacy.Decay do
+defmodule TetoBot.Accounts.Decay do
   @moduledoc """
   Provides utility functions for the intimacy decay process and its configuration.
 
-  The actual periodic decay of intimacy scores is performed by `TetoBot.Intimacy.DecayWorker`,
+  The actual periodic decay of intimacy scores is performed by `TetoBot.Accounts.DecayWorker`,
   an Oban worker. This module supplies the core logic (`perform_decay_check_logic/1`)
   that the worker executes.
 
@@ -18,7 +18,7 @@ defmodule TetoBot.Intimacy.Decay do
 
   Example configuration (typically in `config/config.exs`):
 
-      config :teto_bot, TetoBot.Intimacy.Decay,
+      config :teto_bot, TetoBot.Accounts.Decay,
         inactivity_threshold: :timer.hours(24 * 3), # 3 days
         decay_amount: 5,
         minimum_intimacy: 5
@@ -34,7 +34,7 @@ defmodule TetoBot.Intimacy.Decay do
   3. Updating the user's intimacy score directly in the primary database (Postgres)
      for the respective guild using Ecto.
 
-  These settings are loaded by `TetoBot.Intimacy.DecayWorker` from the application
+  These settings are loaded by `TetoBot.Accounts.DecayWorker` from the application
   environment when it performs a job. Runtime configuration updates are not supported
   through this module; changes require a deployment or application restart.
   """
@@ -42,22 +42,22 @@ defmodule TetoBot.Intimacy.Decay do
   require Logger
   import Ecto.Query
 
-  alias TetoBot.Intimacy
   alias TetoBot.Guilds
   alias Oban
 
   alias TetoBot.Repo
-  alias TetoBot.Users.UserGuild
+  alias TetoBot.Accounts.UserGuild
+  alias TetoBot.Accounts.DecayWorker
 
   @doc """
-  Manually enqueues an intimacy decay job for `TetoBot.Intimacy.DecayWorker`.
+  Manually enqueues an intimacy decay job for `TetoBot.Accounts.DecayWorker`.
 
   The worker will use the decay configuration loaded from the application
   environment at the time of its execution.
   """
   def trigger do
     %{}
-    |> Intimacy.DecayWorker.new()
+    |> DecayWorker.new()
     |> Oban.insert()
   end
 
@@ -69,7 +69,7 @@ defmodule TetoBot.Intimacy.Decay do
   for decay based on the configuration, and applies the decay to their
   intimacy scores stored in the Postgres database via Ecto.
 
-  It is primarily called by `TetoBot.Intimacy.DecayWorker`.
+  It is primarily called by `TetoBot.Accounts.DecayWorker`.
   """
   def perform_decay_check_logic(config) do
     Logger.info("Starting intimacy decay check (logic invoked)")

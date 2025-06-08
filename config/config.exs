@@ -16,7 +16,7 @@ config :teto_bot, Oban,
     {Oban.Plugins.Lifeline, rescue_after: :timer.minutes(30)},
     {Oban.Plugins.Cron,
      crontab: [
-       {"0 */12 * * *", TetoBot.Intimacy.DecayWorker}
+       {"0 */12 * * *", TetoBot.Accounts.DecayWorker}
      ]}
   ]
 
@@ -40,7 +40,7 @@ config :teto_bot,
   llm_top_p: 1,
   llm_top_k: 45
 
-config :teto_bot, TetoBot.Intimacy.Decay,
+config :teto_bot, TetoBot.Accounts.Decay,
   inactivity_threshold: :timer.hours(24 * 3),
   decay_amount: 4,
   minimum_intimacy: 5

@@ -13,7 +13,7 @@ defmodule TetoBot.Messages do
   alias Nostrum.Cache.MessageCache
   alias Nostrum.Struct
 
-  alias TetoBot.Intimacy
+  alias TetoBot.Accounts
   alias TetoBot.LLM
   alias TetoBot.Messages
   alias TetoBot.RateLimiter
@@ -145,7 +145,7 @@ defmodule TetoBot.Messages do
   @doc false
   # Updates user intimacy after successful interaction
   defp update_user_intimacy!({_msg, _response}, guild_id, user_id) do
-    Intimacy.increment(guild_id, user_id, 1, update_message_at: true)
+    Accounts.increment_intimacy(guild_id, user_id, 1, update_message_at: true)
   end
 
   @spec send_rate_limit_warning(integer()) :: :ok

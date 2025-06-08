@@ -4,7 +4,7 @@ defmodule TetoBot.Guilds do
 
   import Ecto.Query
 
-  alias TetoBot.Users.UserGuild
+  alias TetoBot.Accounts.UserGuild
   alias Nostrum.Snowflake
   alias TetoBot.Guilds.Guild
   alias TetoBot.Guilds.Cache

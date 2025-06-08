@@ -1,4 +1,4 @@
-defmodule TetoBot.Users.UserGuild do
+defmodule TetoBot.Accounts.UserGuild do
   use Ecto.Schema
   import Ecto.Changeset
 
