@@ -33,7 +33,10 @@ defmodule TetoBot.Application do
     result = Supervisor.start_link(children, strategy: :one_for_one)
 
     # Warm Cache
-    Task.start(fn -> TetoBot.Guilds.warm_cache() end)
+    unless Application.get_env(:teto_bot, :env) == :test do
+      Task.start(fn -> TetoBot.Guilds.warm_cache() end)
+    end
+
     result
   end
 end
