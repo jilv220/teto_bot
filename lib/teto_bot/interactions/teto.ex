@@ -26,11 +26,10 @@ defmodule TetoBot.Interactions.Teto do
 
   require Logger
 
-  alias TetoBot.Users
+  alias TetoBot.Accounts
   alias Nostrum.Struct
 
   alias TetoBot.Format
-  alias TetoBot.Intimacy
   alias TetoBot.Interactions.{Permissions, Responses}
 
   @spec handle_teto(Struct.Interaction.t()) :: :ok | Nostrum.Api.error()
@@ -49,7 +48,7 @@ defmodule TetoBot.Interactions.Teto do
         } = interaction
       ) do
     Permissions.with_whitelisted_channel(interaction, channel_id, fn ->
-      case Intimacy.get(guild_id, user_id) do
+      case Accounts.get_intimacy(guild_id, user_id) do
         {:ok, intimacy} ->
           response = build_intimacy_response(intimacy, guild_id, user_id)
           Responses.success(interaction, response, ephemeral: true)
@@ -63,7 +62,7 @@ defmodule TetoBot.Interactions.Teto do
   @doc false
   # Builds the formatted response message containing intimacy information.
   defp build_intimacy_response(intimacy, guild_id, user_id) do
-    {curr, next} = Intimacy.get_tier_info(intimacy)
+    {curr, next} = Accounts.get_tier_info(intimacy)
     {curr_val, curr_tier} = curr
     {next_val, next_tier} = next
 
@@ -93,7 +92,7 @@ defmodule TetoBot.Interactions.Teto do
   @doc false
   # Gets the formatted feed cooldown status message.
   defp get_feed_cooldown_message(guild_id, user_id) do
-    case Users.check_feed_cooldown(guild_id, user_id) do
+    case Accounts.check_feed_cooldown(guild_id, user_id) do
       {:ok, :allowed} ->
         "You **can** feed Teto now"
 

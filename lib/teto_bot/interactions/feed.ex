@@ -6,8 +6,8 @@ defmodule TetoBot.Interactions.Feed do
   require Logger
 
   alias Nostrum.Struct.Interaction
-  alias TetoBot.{Format, Intimacy, Users}
-  alias TetoBot.Interactions.{Responses, Permissions}
+  alias TetoBot.{Accounts, Format}
+  alias TetoBot.Interactions.{Permissions, Responses}
 
   @spec handle_feed(Interaction.t(), integer(), integer(), integer()) :: :ok | Nostrum.Api.error()
   @doc """
@@ -15,7 +15,7 @@ defmodule TetoBot.Interactions.Feed do
   """
   def handle_feed(interaction, user_id, guild_id, channel_id) do
     Permissions.with_whitelisted_channel(interaction, channel_id, fn ->
-      case Users.check_feed_cooldown(guild_id, user_id) do
+      case Accounts.check_feed_cooldown(guild_id, user_id) do
         {:ok, :allowed} ->
           execute_feed_command(interaction, user_id, guild_id)
 
@@ -30,22 +30,32 @@ defmodule TetoBot.Interactions.Feed do
 
   @spec execute_feed_command(Interaction.t(), integer(), integer()) :: :ok | Nostrum.Api.error()
   defp execute_feed_command(interaction, user_id, guild_id) do
-    Users.set_feed_cooldown(guild_id, user_id)
-    Intimacy.increment(guild_id, user_id, 5)
+    case Accounts.feed_teto(guild_id, user_id, 5) do
+      {:ok, _changes} ->
+        case Accounts.get_intimacy(guild_id, user_id) do
+          {:ok, intimacy} ->
+            success_message =
+              "You fed Teto! Your intimacy with her increased by 5.\nCurrent intimacy: #{intimacy}. 💖"
 
-    case Intimacy.get(guild_id, user_id) do
-      {:ok, intimacy} ->
-        success_message =
-          "You fed Teto! Your intimacy with her increased by 5.\nCurrent intimacy: #{intimacy}. 💖"
+            Responses.success(interaction, success_message)
 
-        Responses.success(interaction, success_message)
+          {:error, reason} ->
+            Logger.error(
+              "Failed to get intimacy after feeding for user #{user_id}: #{inspect(reason)}"
+            )
+
+            Responses.success(
+              interaction,
+              "You fed Teto! Your intimacy with her increased by 5. 💖"
+            )
+        end
 
       {:error, reason} ->
         Logger.error(
-          "Failed to get intimacy after feeding for user #{user_id}: #{inspect(reason)}"
+          "Failed to feed Teto for user #{user_id} in guild #{guild_id} with reason: #{inspect(reason)}"
         )
 
-        Responses.success(interaction, "You fed Teto! Your intimacy with her increased by 5. 💖")
+        Responses.error(interaction, "Something went wrong while feeding Teto. Please try again.")
     end
   end
 end

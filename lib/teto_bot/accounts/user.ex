@@ -1,4 +1,4 @@
-defmodule TetoBot.Users.User do
+defmodule TetoBot.Accounts.User do
   use Ecto.Schema
   import Ecto.Changeset
 

@@ -6,10 +6,9 @@ defmodule TetoBot.Interactions.Leaderboard do
   require Logger
 
   alias Nostrum.Api
-  alias TetoBot.Intimacy
+  alias TetoBot.Accounts
   alias TetoBot.Interactions.Responses
 
-  @max_concurrency 20
   @api_timeout 2000
   @task_timeout 1500
 
@@ -18,7 +17,7 @@ defmodule TetoBot.Interactions.Leaderboard do
   Handles the leaderboard command interaction.
   """
   def handle_leaderboard(interaction, guild_id) do
-    case Intimacy.get_leaderboard(guild_id) do
+    case Accounts.get_leaderboard(guild_id) do
       {:ok, []} ->
         Responses.success(interaction, "No one has earned intimacy with Teto in this guild yet!")
 
@@ -61,78 +60,44 @@ defmodule TetoBot.Interactions.Leaderboard do
     end
   end
 
-  @spec fetch_user_data_concurrently(integer(), list(integer())) ::
-          {:ok, {map(), map()}} | {:error, :timeout | term()}
   defp fetch_user_data_concurrently(guild_id, user_ids) do
-    # Use regular tasks with proper cleanup
-    member_task =
+    parent = self()
+
+    task =
       Task.async(fn ->
-        fetch_guild_members_batch(guild_id, user_ids)
+        # Fetch guild members and users concurrently
+        member_task = Task.async(fn -> Api.Guild.members(guild_id, limit: 1000) end)
+        user_tasks = Enum.map(user_ids, &Task.async(fn -> Api.User.get(&1) end))
+
+        # Await results
+        {:ok, members} = Task.await(member_task, @api_timeout)
+        users = Task.await_many(user_tasks, @api_timeout)
+
+        # Process results
+        members_map =
+          members
+          |> Enum.map(fn m -> {m.user_id, m} end)
+          |> Map.new()
+
+        users_map =
+          users
+          |> Enum.map(fn {:ok, u} -> {u.id, u} end)
+          |> Map.new()
+
+        send(parent, {:user_data_fetched, {:ok, {members_map, users_map}}})
       end)
 
-    user_task =
-      Task.async(fn ->
-        fetch_users_batch(user_ids)
-      end)
-
-    try do
-      members_map = Task.await(member_task, @api_timeout)
-      users_map = Task.await(user_task, @api_timeout)
-      {:ok, {members_map, users_map}}
-    rescue
-      error ->
-        Task.shutdown(member_task, :brutal_kill)
-        Task.shutdown(user_task, :brutal_kill)
-        {:error, error}
-    catch
-      :exit, {:timeout, _} ->
-        Task.shutdown(member_task, :brutal_kill)
-        Task.shutdown(user_task, :brutal_kill)
+    receive do
+      {:user_data_fetched, result} ->
+        Task.shutdown(task)
+        result
+    after
+      @task_timeout ->
+        Task.shutdown(task, :brutal_kill)
         {:error, :timeout}
     end
   end
 
-  @spec fetch_guild_members_batch(integer(), list(integer())) :: map()
-  defp fetch_guild_members_batch(guild_id, user_ids) do
-    user_ids
-    |> Task.async_stream(
-      fn user_id ->
-        case Api.Guild.member(guild_id, user_id) do
-          {:ok, member} -> {user_id, member}
-          {:error, _} -> {user_id, nil}
-        end
-      end,
-      max_concurrency: @max_concurrency,
-      timeout: @task_timeout,
-      on_timeout: :kill_task
-    )
-    |> Enum.reduce(%{}, fn
-      {:ok, {user_id, member}}, acc -> Map.put(acc, user_id, member)
-      {:exit, _}, acc -> acc
-    end)
-  end
-
-  @spec fetch_users_batch(list(integer())) :: map()
-  defp fetch_users_batch(user_ids) do
-    user_ids
-    |> Task.async_stream(
-      fn user_id ->
-        case Api.User.get(user_id) do
-          {:ok, user} -> {user_id, user}
-          {:error, _} -> {user_id, nil}
-        end
-      end,
-      max_concurrency: @max_concurrency,
-      timeout: @task_timeout,
-      on_timeout: :kill_task
-    )
-    |> Enum.reduce(%{}, fn
-      {:ok, {user_id, user}}, acc -> Map.put(acc, user_id, user)
-      {:exit, _}, acc -> acc
-    end)
-  end
-
-  @spec build_leaderboard_text(list(), map(), map()) :: String.t()
   defp build_leaderboard_text(entries, members_map, users_map) do
     leaderboard_entries =
       entries
@@ -151,7 +116,6 @@ defmodule TetoBot.Interactions.Leaderboard do
     """
   end
 
-  @spec get_display_name(integer(), map(), map()) :: String.t()
   defp get_display_name(user_id, members_map, users_map) do
     # Try nickname from guild member first
     case Map.get(members_map, user_id) do
