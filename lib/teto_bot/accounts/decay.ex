@@ -107,16 +107,16 @@ defmodule TetoBot.Accounts.Decay do
   @doc false
   # User is inactive if `:last_message_at` or `:last_feed` is less than threshold
   defp user_inactive?(member, threshold) do
-    last_interaction =
-      [member.last_message_at, member.last_feed]
-      |> Enum.reject(&is_nil/1)
-      |> Enum.max_by(&DateTime.to_unix(&1), &DateTime.compare/2)
+    case [member.last_message_at, member.last_feed] |> Enum.reject(&is_nil/1) do
+      [] ->
+        # If both interaction timestamps are nil, the user is considered inactive.
+        true
 
-    if last_interaction do
-      DateTime.to_unix(last_interaction, :millisecond) < threshold
-    else
-      # If both are nil, the user is considered inactive
-      true
+      interactions ->
+        # Find the most recent interaction time.
+        last_interaction = Enum.max(interactions)
+        # Compare the most recent interaction time against the inactivity threshold.
+        DateTime.to_unix(last_interaction, :millisecond) < threshold
     end
   end
 
