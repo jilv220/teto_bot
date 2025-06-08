@@ -1,132 +1,20 @@
 defmodule TetoBot.Guilds do
-  require Nostrum.Snowflake
-  require Logger
+  @moduledoc """
+  The Guilds domain.
+  """
+  use Ash.Domain
 
-  import Ecto.Query
-
-  alias TetoBot.Accounts.UserGuild
-  alias Nostrum.Snowflake
   alias TetoBot.Guilds.Guild
-  alias TetoBot.Guilds.Cache
 
-  @repo Application.compile_env(:teto_bot, :repo, TetoBot.Repo)
-
-  @spec create(Snowflake.t()) ::
-          {:ok, Ecto.Schema.t()} | {:error, Ecto.Changeset.t()} | {:error, :invalid_id}
-  @doc """
-  A guild added our app
-  Insert a new guild record `guilds` table and add to cache
-  """
-  def create(guild_id) when Snowflake.is_snowflake(guild_id) do
-    case %Guild{}
-         |> Guild.changeset(%{guild_id: guild_id})
-         |> @repo.insert([]) do
-      {:ok, _guild} = result ->
-        Cache.add(guild_id)
-        result
-
-      error ->
-        error
+  resources do
+    resource Guild do
+      define :guild_ids, action: :guild_ids
+      define :create_guild, args: [:guild_id], action: :create_guild
+      define :delete_guild, args: [:guild_id], action: :delete_guild
+      define :member_check, args: [:guild_id], action: :member_check
+      define :members, args: [:guild_id], action: :members
+      define :warm_cache, action: :warm_cache
+      define :cache_stats, action: :cache_stats
     end
-  end
-
-  def create(_), do: {:error, :invalid_id}
-
-  @spec delete(Snowflake.t()) ::
-          {:ok, Ecto.Schema.t()}
-          | {:error, Ecto.Changeset.t()}
-          | {:error, :not_found}
-          | {:error, :invalid_id}
-  @doc """
-  A guild removed our app
-  Remove the record from `guilds` table and cache
-  """
-  def delete(guild_id) when Snowflake.is_snowflake(guild_id) do
-    case @repo.get_by(Guild, [guild_id: guild_id], []) do
-      nil ->
-        {:error, :not_found}
-
-      guild ->
-        case @repo.delete(guild, []) do
-          {:ok, _guild} = result ->
-            Cache.remove(guild_id)
-            result
-
-          error ->
-            error
-        end
-    end
-  end
-
-  def delete(_), do: {:error, :invalid_id}
-
-  @doc """
-  Check if guild is a member (first check cache, then database if not found)
-  """
-  def member?(guild_id) when Snowflake.is_snowflake(guild_id) do
-    # Fast cache lookup first
-    if Cache.exists?(guild_id) do
-      true
-    else
-      # Fallback to database lookup
-      case @repo.get_by(Guild, [guild_id: guild_id], []) do
-        nil ->
-          false
-
-        _guild ->
-          # Add to cache for future fast lookups
-          Cache.add(guild_id)
-          true
-      end
-    end
-  end
-
-  def member?(_), do: false
-
-  def members(guild_id) when Snowflake.is_snowflake(guild_id) do
-    try do
-      result =
-        from(ug in UserGuild,
-          where: ug.guild_id == ^guild_id
-        )
-        |> @repo.all([])
-
-      {:ok, result}
-    rescue
-      error in Ecto.QueryError ->
-        Logger.error("Failed to get members: #{inspect(error)}")
-        {:error, error}
-    end
-  end
-
-  def members(_), do: {:error, :invalid_id}
-
-  @spec ids() :: [Snowflake.t()]
-  @doc """
-  Get all guild IDs from the database
-  Returns a list of guild IDs (Snowflakes)
-  """
-  def ids do
-    @repo.all(Guild, [])
-    |> Enum.map(& &1.guild_id)
-  end
-
-  @doc """
-  Get cache statistics
-  """
-  def cache_stats() do
-    %{
-      cached_guilds: Cache.count(),
-      cached_guild_ids: Cache.list()
-    }
-  end
-
-  @doc """
-  Load all guild IDs from database into cache
-  Useful for cache warming on application startup
-  """
-  def warm_cache do
-    ids()
-    |> Enum.each(&Cache.add/1)
   end
 end

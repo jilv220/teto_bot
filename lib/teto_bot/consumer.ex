@@ -3,12 +3,12 @@ defmodule TetoBot.Consumer do
 
   require Logger
 
-  alias TetoBot.Guilds
   alias Nostrum.Api
   alias Nostrum.Struct.Guild
 
   alias TetoBot.Channels
   alias TetoBot.Commands
+  alias TetoBot.Guilds
   alias TetoBot.Interactions
   alias TetoBot.Messages
 
@@ -17,24 +17,40 @@ defmodule TetoBot.Consumer do
   end
 
   def handle_event({:GUILD_CREATE, %Guild{id: new_guild_id} = _new_guild, _}) do
-    case Guilds.member?(new_guild_id) do
-      false ->
-        Guilds.create(new_guild_id)
-        Logger.info("New guild #{new_guild_id} joined!")
+    case Guilds.member_check(new_guild_id) do
+      {:ok, false} ->
+        case Guilds.create_guild(new_guild_id) do
+          {:ok, _guild} ->
+            Logger.info("New guild #{new_guild_id} joined!")
 
-      _ ->
+          {:error, reason} ->
+            Logger.error("Failed to create guild #{new_guild_id}: #{inspect(reason)}")
+        end
+
+      {:ok, true} ->
         :ok
+
+      {:error, reason} ->
+        Logger.error("Failed to check guild membership for #{new_guild_id}: #{inspect(reason)}")
     end
   end
 
   def handle_event({:GUILD_DELETE, {%Guild{id: old_guild_id}, _}, _}) do
-    case Guilds.member?(old_guild_id) do
-      true ->
-        Guilds.delete(old_guild_id)
-        Logger.info("Guild #{old_guild_id} has left us!")
+    case Guilds.member_check(old_guild_id) do
+      {:ok, true} ->
+        case Guilds.delete_guild(old_guild_id) do
+          {:ok, _guild} ->
+            Logger.info("Guild #{old_guild_id} has left us!")
 
-      _ ->
+          {:error, reason} ->
+            Logger.error("Failed to delete guild #{old_guild_id}: #{inspect(reason)}")
+        end
+
+      {:ok, false} ->
         :ok
+
+      {:error, reason} ->
+        Logger.error("Failed to check guild membership for #{old_guild_id}: #{inspect(reason)}")
     end
   end
 
