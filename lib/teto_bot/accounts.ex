@@ -148,8 +148,10 @@ defmodule TetoBot.Accounts do
 
   @doc """
   Checks if a user can use the feed command based on their last_feed timestamp.
+
+  Feed cooldowns are reset to nil at midnight UTC by DailyResetWorker.
   """
-  @spec check_feed_cooldown(integer(), integer()) :: {:ok, :allowed} | {:error, integer()}
+  @spec check_feed_cooldown(integer(), integer()) :: {:ok, :allowed} | {:error, :cooldown_active}
   def check_feed_cooldown(guild_id, user_id) do
     case get_membership(user_id, guild_id) do
       {:ok, nil} ->
@@ -157,20 +159,8 @@ defmodule TetoBot.Accounts do
 
       {:ok, user_guild} ->
         case user_guild.last_feed do
-          nil ->
-            {:ok, :allowed}
-
-          last_feed ->
-            now = DateTime.utc_now()
-            today_start = DateTime.new!(Date.utc_today(), ~T[00:00:00], "Etc/UTC")
-
-            if DateTime.compare(last_feed, today_start) == :lt do
-              {:ok, :allowed}
-            else
-              tomorrow_start = DateTime.add(today_start, 1, :day)
-              time_left = DateTime.diff(tomorrow_start, now, :second)
-              {:error, time_left}
-            end
+          nil -> {:ok, :allowed}
+          _timestamp -> {:error, :cooldown_active}
         end
 
       error ->

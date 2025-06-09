@@ -40,23 +40,26 @@ defmodule TetoBot.Accounts.DailyResetWorker do
   end
 
   defp reset_all_daily_counts do
-    # Reset daily_message_count to 0 for all users where it's > 0
+    # Reset daily_message_count to 0 and last_feed to nil for all users where needed
     case UserGuild
          |> Ash.Query.for_read(:read)
-         |> Ash.Query.filter(daily_message_count > 0)
+         |> Ash.Query.filter(daily_message_count > 0 or not is_nil(last_feed))
          |> Ash.read() do
       {:ok, user_guilds} ->
         reset_count =
           Enum.reduce(user_guilds, 0, fn user_guild, count ->
             case user_guild
-                 |> Ash.Changeset.for_update(:update, %{daily_message_count: 0})
+                 |> Ash.Changeset.for_update(:update, %{
+                   daily_message_count: 0,
+                   last_feed: nil
+                 })
                  |> Ash.update() do
               {:ok, _} ->
                 count + 1
 
               {:error, reason} ->
                 Logger.error(
-                  "Failed to reset daily count for user #{user_guild.user_id} in guild #{user_guild.guild_id}: #{inspect(reason)}"
+                  "Failed to reset daily metrics for user #{user_guild.user_id} in guild #{user_guild.guild_id}: #{inspect(reason)}"
                 )
 
                 count
