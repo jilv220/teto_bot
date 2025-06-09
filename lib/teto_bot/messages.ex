@@ -86,6 +86,8 @@ defmodule TetoBot.Messages do
       generate_and_send_response!(msg)
     else
       send_rate_limit_warning(channel_id)
+
+      :ok
     end
   end
 
@@ -107,7 +109,9 @@ defmodule TetoBot.Messages do
     |> build_message_context(guild_id, user_id, channel_id)
     |> generate_llm_response()
     |> send_discord_response(channel_id, message_id)
-    |> update_user_intimacy!(guild_id, user_id)
+    |> update_user_metrics(guild_id, user_id)
+
+    :ok
   end
 
   @doc false
@@ -143,19 +147,16 @@ defmodule TetoBot.Messages do
   end
 
   @doc false
-  # Updates user intimacy after successful interaction
-  defp update_user_intimacy!({_msg, _response}, guild_id, user_id) do
-    Accounts.increment_intimacy(guild_id, user_id, 1, update_message_at: true)
+  # Updates user metrics after successful interaction
+  defp update_user_metrics({_msg, _response}, guild_id, user_id) do
+    Accounts.update_user_metrics(guild_id, user_id)
   end
 
-  @spec send_rate_limit_warning(integer()) :: :ok
   @doc false
   # Sends a rate limit warning to the channel.
   defp send_rate_limit_warning(channel_id) do
     Api.Message.create(channel_id,
       content: "You're sending messages too quickly! Please wait a moment."
     )
-
-    :ok
   end
 end

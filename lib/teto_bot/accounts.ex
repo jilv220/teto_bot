@@ -8,7 +8,7 @@ defmodule TetoBot.Accounts do
 
   require Ash.Query
 
-  alias TetoBot.Accounts.{User, UserGuild, Tier, DecayWorker}
+  alias TetoBot.Accounts.{User, UserGuild, Tier, DecayWorker, DailyResetWorker}
 
   resources do
     resource User do
@@ -71,6 +71,17 @@ defmodule TetoBot.Accounts do
     case get_membership(user_id, guild_id) do
       {:ok, nil} -> {:ok, 0}
       {:ok, user_guild} -> {:ok, user_guild.intimacy}
+      error -> error
+    end
+  end
+
+  @doc """
+  Retrieves a user's metrics.
+  """
+  def get_metrics(guild_id, user_id) do
+    case get_membership(user_id, guild_id) do
+      {:ok, nil} -> {:ok, {0, 0}}
+      {:ok, user_guild} -> {:ok, {user_guild.intimacy, user_guild.daily_message_count}}
       error -> error
     end
   end
@@ -219,10 +230,86 @@ defmodule TetoBot.Accounts do
     end
   end
 
+  @doc """
+  Updates user metrics when they send a message, incrementing daily count and intimacy.
+
+  Daily message counts are reset to 0 at midnight UTC by DailyResetWorker.
+  """
+  @spec update_user_metrics(integer(), integer()) :: {:ok, map()} | {:error, any()}
+  def update_user_metrics(guild_id, user_id) do
+    case get_membership(user_id, guild_id) do
+      {:ok, nil} ->
+        # Create user and membership first
+        case create_membership(user_id, guild_id) do
+          {:ok, user_guild} ->
+            now = DateTime.utc_now()
+            daily_message_count = 1
+            intimacy_increment = calculate_intimacy_increment(daily_message_count)
+
+            case user_guild
+                 |> Ash.Changeset.for_update(:update, %{
+                   last_message_at: now,
+                   intimacy: intimacy_increment,
+                   daily_message_count: daily_message_count
+                 })
+                 |> Ash.update() do
+              {:ok, updated_user_guild} ->
+                {:ok, %{user_guild: updated_user_guild}}
+
+              error ->
+                error
+            end
+
+          error ->
+            error
+        end
+
+      {:ok, user_guild} ->
+        now = DateTime.utc_now()
+        new_daily_count = user_guild.daily_message_count + 1
+
+        intimacy_increment = calculate_intimacy_increment(new_daily_count)
+        new_intimacy = user_guild.intimacy + intimacy_increment
+
+        case user_guild
+             |> Ash.Changeset.for_update(:update, %{
+               last_message_at: now,
+               intimacy: new_intimacy,
+               daily_message_count: new_daily_count
+             })
+             |> Ash.update() do
+          {:ok, updated_user_guild} ->
+            {:ok, %{user_guild: updated_user_guild}}
+
+          error ->
+            error
+        end
+
+      error ->
+        error
+    end
+  end
+
+  defp calculate_intimacy_increment(daily_message_count) do
+    cond do
+      daily_message_count <= 5 ->
+        1
+
+      # Every other message
+      daily_message_count <= 15 ->
+        if rem(daily_message_count, 2) == 0, do: 1, else: 0
+
+      # Every 4th message
+      true ->
+        if rem(daily_message_count, 4) == 0, do: 1, else: 0
+    end
+  end
+
   # Delegate tier functions to the Tier module
   defdelegate get_tier_name(intimacy), to: Tier, as: :get_tier_name
   defdelegate get_tier_info(intimacy), to: Tier, as: :get_tier_info
 
-  # Delegate decay triggering to DecayWorker
+  # Delegate job triggering to workers
   defdelegate trigger_decay_check(), to: DecayWorker, as: :trigger
+  defdelegate trigger_daily_reset(), to: DailyResetWorker, as: :trigger
 end

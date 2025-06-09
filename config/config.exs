@@ -55,7 +55,8 @@ config :teto_bot, Oban,
     {Oban.Plugins.Lifeline, rescue_after: :timer.minutes(30)},
     {Oban.Plugins.Cron,
      crontab: [
-       {"0 */12 * * *", TetoBot.Accounts.DecayWorker}
+       {"0 0 * * *", TetoBot.Accounts.DecayWorker},
+       {"0 0 * * *", TetoBot.Accounts.DailyResetWorker}
      ]}
   ]
 
