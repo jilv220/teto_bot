@@ -40,14 +40,10 @@ defmodule TetoBot.Accounts.Decay do
   """
 
   require Logger
-  import Ecto.Query
 
   alias TetoBot.Guilds
+  alias TetoBot.Accounts
   alias Oban
-
-  alias TetoBot.Repo
-  alias TetoBot.Accounts.UserGuild
-  alias TetoBot.Accounts.DecayWorker
 
   @doc """
   Manually enqueues an intimacy decay job for `TetoBot.Accounts.DecayWorker`.
@@ -57,7 +53,7 @@ defmodule TetoBot.Accounts.Decay do
   """
   def trigger do
     %{}
-    |> DecayWorker.new()
+    |> TetoBot.Accounts.DecayWorker.new()
     |> Oban.insert()
   end
 
@@ -87,7 +83,7 @@ defmodule TetoBot.Accounts.Decay do
   # Private Helper Functions
 
   defp process_guild_decay(guild_id, config) do
-    case Guilds.members(guild_id: guild_id) do
+    case Accounts.get_guild_members(guild_id) do
       {:ok, members} ->
         inactive_members = filter_inactive_members(members, config)
         apply_decay_to_members(guild_id, inactive_members, config)
@@ -137,61 +133,24 @@ defmodule TetoBot.Accounts.Decay do
   # Calculates new intimacy and, if changed, updates the UserGuild record.
   defp apply_decay_to_members(_guild_id, [], _config), do: :ok
 
-  defp apply_decay_to_members(guild_id, inactive_members, config) do
-    updates_count =
-      inactive_members
-      |> Enum.map(&process_member_decay(guild_id, &1, config))
-      |> Enum.count(& &1)
-
-    log_update_results(guild_id, updates_count)
-  end
-
-  defp process_member_decay(
-         guild_id,
-         %UserGuild{user_id: user_id, intimacy: current_intimacy},
-         config
-       ) do
-    new_intimacy = max(current_intimacy - config.decay_amount, config.minimum_intimacy)
-
-    case new_intimacy == current_intimacy do
-      # No update needed
-      true -> false
-      false -> update_member_intimacy(guild_id, user_id, current_intimacy, new_intimacy)
-    end
-  end
-
-  defp update_member_intimacy(guild_id, user_id, current_intimacy, new_intimacy) do
-    query = from(ug in UserGuild, where: ug.guild_id == ^guild_id and ug.user_id == ^user_id)
-
-    case Repo.update_all(query, set: [intimacy: new_intimacy, updated_at: DateTime.utc_now()]) do
-      {1, _} ->
-        Logger.info(
-          "Ecto: Decayed intimacy for user #{user_id} in guild #{guild_id} from #{current_intimacy} to #{new_intimacy}."
-        )
-
-        true
-
-      {0, _} ->
-        Logger.warning(
-          "Ecto: Failed to find UserGuild record for user #{user_id} in guild #{guild_id} during decay."
-        )
-
-        false
+  defp apply_decay_to_members(guild_id, _inactive_members, config) do
+    # Use the new Ash action for batch decay
+    case Accounts.apply_decay(guild_id, config.decay_amount, config.minimum_intimacy) do
+      {:ok, updates_count} ->
+        log_update_results(guild_id, updates_count)
 
       {:error, reason} ->
         Logger.error(
-          "Ecto: Failed to decay intimacy for user #{user_id} in guild #{guild_id}. Reason: #{inspect(reason)}"
+          "Ash: Failed to apply decay for guild #{guild_id}. Reason: #{inspect(reason)}"
         )
-
-        false
     end
   end
 
   defp log_update_results(guild_id, updates_count) do
     message =
       case updates_count do
-        0 -> "Ecto: No users required intimacy updates in guild #{guild_id} after filtering."
-        count -> "Ecto: Successfully updated intimacy for #{count} users in guild #{guild_id}."
+        0 -> "Ash: No users required intimacy updates in guild #{guild_id} after filtering."
+        count -> "Ash: Successfully updated intimacy for #{count} users in guild #{guild_id}."
       end
 
     Logger.info(message)

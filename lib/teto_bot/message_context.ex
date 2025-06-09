@@ -54,7 +54,7 @@ defmodule TetoBot.MessageContext do
     filtered_messages
     |> tap(fn msgs ->
       token_count = get_total_token_count(msgs)
-      Logger.info("Message context: #{length(msgs)} messages, ~#{token_count} tokens")
+      Logger.info("channel #{channel_id}: #{length(msgs)} messages, ~#{token_count} tokens")
     end)
     |> Enum.map(fn {role, username, content, _} -> {role, username, content} end)
   end
