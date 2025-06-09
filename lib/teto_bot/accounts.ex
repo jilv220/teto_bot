@@ -151,7 +151,7 @@ defmodule TetoBot.Accounts do
 
   Feed cooldowns are reset to nil at midnight UTC by DailyResetWorker.
   """
-  @spec check_feed_cooldown(integer(), integer()) :: {:ok, :allowed} | {:error, :cooldown_active}
+  @spec check_feed_cooldown(integer(), integer()) :: {:ok, :allowed} | {:error, integer()}
   def check_feed_cooldown(guild_id, user_id) do
     case get_membership(user_id, guild_id) do
       {:ok, nil} ->
@@ -159,8 +159,15 @@ defmodule TetoBot.Accounts do
 
       {:ok, user_guild} ->
         case user_guild.last_feed do
-          nil -> {:ok, :allowed}
-          _timestamp -> {:error, :cooldown_active}
+          nil ->
+            {:ok, :allowed}
+
+          _timestamp ->
+            now = DateTime.utc_now()
+            tomorrow_start = DateTime.new!(Date.add(Date.utc_today(), 1), ~T[00:00:00], "Etc/UTC")
+            time_left = DateTime.diff(tomorrow_start, now, :second)
+
+            {:error, time_left}
         end
 
       error ->
