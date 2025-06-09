@@ -32,13 +32,7 @@ defmodule TetoBot.Accounts.UserGuild do
 
         case {Snowflake.is_snowflake(user_id), Snowflake.is_snowflake(guild_id)} do
           {true, true} ->
-            __MODULE__
-            |> Ash.Changeset.for_create(:create, %{
-              user_id: user_id,
-              guild_id: guild_id,
-              intimacy: 0
-            })
-            |> Ash.create()
+            ensure_user_exists_and_create_membership(user_id, guild_id)
 
           _ ->
             {:error, :invalid_id}
@@ -108,15 +102,8 @@ defmodule TetoBot.Accounts.UserGuild do
             |> Ash.update()
 
           {:ok, nil} ->
-            # Create the membership if it doesn't exist
-            __MODULE__
-            |> Ash.Changeset.for_create(:create, %{
-              user_id: user_id,
-              guild_id: guild_id,
-              intimacy: 0,
-              last_message_at: now
-            })
-            |> Ash.create()
+            # Create the membership if it doesn't exist, ensuring user exists first
+            ensure_user_exists_and_create_membership(user_id, guild_id, last_message_at: now)
 
           error ->
             error
@@ -260,6 +247,48 @@ defmodule TetoBot.Accounts.UserGuild do
 
   identities do
     identity :unique_user_guild, [:user_id, :guild_id]
+  end
+
+  # Private helper function to ensure user exists before creating membership
+  defp ensure_user_exists_and_create_membership(user_id, guild_id, opts \\ []) do
+    # Check if user exists first
+    case TetoBot.Accounts.get_user(user_id) do
+      {:ok, nil} ->
+        # User doesn't exist, create it first
+        case TetoBot.Accounts.create_user(user_id) do
+          {:ok, _user} ->
+            create_membership_record(user_id, guild_id, opts)
+
+          {:error, _changeset} = error ->
+            error
+        end
+
+      {:ok, _user} ->
+        # User exists, proceed with membership creation
+        create_membership_record(user_id, guild_id, opts)
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  # Private helper function for creating membership record
+  defp create_membership_record(user_id, guild_id, opts) do
+    attrs = %{
+      user_id: user_id,
+      guild_id: guild_id,
+      intimacy: 0
+    }
+
+    attrs =
+      case Keyword.get(opts, :last_message_at) do
+        nil -> attrs
+        timestamp -> Map.put(attrs, :last_message_at, timestamp)
+      end
+
+    __MODULE__
+    |> Ash.Changeset.for_create(:create, attrs)
+    |> Ash.create()
   end
 
   # Private helper function for decay logic
