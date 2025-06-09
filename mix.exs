@@ -44,7 +44,6 @@ defmodule TetoBot.MixProject do
       {:oban, "~> 2.0"},
       {:igniter, "~> 0.6", only: [:dev, :test]},
       {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
-      {:ex_machina, "~> 2.7", only: :test},
       {:mox, "~> 1.1", only: :test}
     ]
   end

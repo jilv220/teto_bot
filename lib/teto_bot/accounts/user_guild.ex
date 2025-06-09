@@ -22,20 +22,36 @@ defmodule TetoBot.Accounts.UserGuild do
     # Add default CRUD actions
     defaults [:read, :destroy, create: :*, update: :*]
 
-    action :create_membership, :struct do
-      argument :user_id, :integer, allow_nil?: false
-      argument :guild_id, :integer, allow_nil?: false
+    create :create_membership do
+      accept [:user_id, :guild_id]
 
-      run fn input, _ ->
-        user_id = input.arguments.user_id
-        guild_id = input.arguments.guild_id
+      validate fn changeset, _ ->
+        user_id = Ash.Changeset.get_attribute(changeset, :user_id)
+        guild_id = Ash.Changeset.get_attribute(changeset, :guild_id)
 
         case {Snowflake.is_snowflake(user_id), Snowflake.is_snowflake(guild_id)} do
-          {true, true} ->
-            ensure_user_exists_and_create_membership(user_id, guild_id)
+          {true, true} -> :ok
+          {false, _} -> {:error, field: :user_id, message: "must be a valid Discord snowflake"}
+          {_, false} -> {:error, field: :guild_id, message: "must be a valid Discord snowflake"}
+        end
+      end
 
-          _ ->
-            {:error, :invalid_id}
+      change fn changeset, _context ->
+        user_id = Ash.Changeset.get_attribute(changeset, :user_id)
+
+        # Ensure user exists before creating membership
+        case TetoBot.Accounts.get_user(user_id) do
+          {:ok, nil} ->
+            case TetoBot.Accounts.create_user(user_id) do
+              {:ok, _user} -> changeset
+              {:error, error} -> Ash.Changeset.add_error(changeset, error)
+            end
+
+          {:ok, _user} ->
+            changeset
+
+          {:error, error} ->
+            Ash.Changeset.add_error(changeset, error)
         end
       end
     end
@@ -103,7 +119,19 @@ defmodule TetoBot.Accounts.UserGuild do
 
           {:ok, nil} ->
             # Create the membership if it doesn't exist, ensuring user exists first
-            ensure_user_exists_and_create_membership(user_id, guild_id, last_message_at: now)
+            case __MODULE__
+                 |> Ash.Changeset.for_create(:create_membership, %{
+                   user_id: user_id,
+                   guild_id: guild_id,
+                   last_message_at: now
+                 })
+                 |> Ash.create() do
+              {:ok, user_guild} ->
+                {:ok, user_guild}
+
+              error ->
+                error
+            end
 
           error ->
             error
@@ -247,48 +275,6 @@ defmodule TetoBot.Accounts.UserGuild do
 
   identities do
     identity :unique_user_guild, [:user_id, :guild_id]
-  end
-
-  # Private helper function to ensure user exists before creating membership
-  defp ensure_user_exists_and_create_membership(user_id, guild_id, opts \\ []) do
-    # Check if user exists first
-    case TetoBot.Accounts.get_user(user_id) do
-      {:ok, nil} ->
-        # User doesn't exist, create it first
-        case TetoBot.Accounts.create_user(user_id) do
-          {:ok, _user} ->
-            create_membership_record(user_id, guild_id, opts)
-
-          {:error, _changeset} = error ->
-            error
-        end
-
-      {:ok, _user} ->
-        # User exists, proceed with membership creation
-        create_membership_record(user_id, guild_id, opts)
-
-      {:error, _} = error ->
-        error
-    end
-  end
-
-  # Private helper function for creating membership record
-  defp create_membership_record(user_id, guild_id, opts) do
-    attrs = %{
-      user_id: user_id,
-      guild_id: guild_id,
-      intimacy: 0
-    }
-
-    attrs =
-      case Keyword.get(opts, :last_message_at) do
-        nil -> attrs
-        timestamp -> Map.put(attrs, :last_message_at, timestamp)
-      end
-
-    __MODULE__
-    |> Ash.Changeset.for_create(:create, attrs)
-    |> Ash.create()
   end
 
   # Private helper function for decay logic

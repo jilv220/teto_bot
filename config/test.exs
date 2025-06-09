@@ -1,5 +1,8 @@
 import Config
 
+config :ash, :disable_async?, true
+config :ash, :missed_notifications, :ignore
+
 config :teto_bot, Oban, testing: :manual
 config :logger, :console, metadata: [:shard, :guild, :channel, :bot]
 
@@ -12,7 +15,6 @@ config :teto_bot, TetoBot.Repo,
   pool: Ecto.Adapters.SQL.Sandbox
 
 config :teto_bot, TetoBot.Channels.Cache, TetoBot.Channels.CacheMock
-config :teto_bot, :repo, TetoBot.RepoMock
 
 ## TODO: Replace this with Mox!!!
 config :teto_bot,

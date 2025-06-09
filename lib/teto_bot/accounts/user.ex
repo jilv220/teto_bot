@@ -22,26 +22,16 @@ defmodule TetoBot.Accounts.User do
     # Add default CRUD actions
     defaults [:read, :destroy, create: :*, update: :*]
 
-    action :create_user, :struct do
-      argument :user_id, :integer, allow_nil?: false
+    create :create_user do
+      accept [:user_id]
 
-      run fn input, _ ->
-        user_id = input.arguments.user_id
+      validate fn changeset, _ ->
+        user_id = Ash.Changeset.get_attribute(changeset, :user_id)
 
-        case Snowflake.is_snowflake(user_id) do
-          false ->
-            {:error, :invalid_id}
-
-          true ->
-            case __MODULE__
-                 |> Ash.Changeset.for_create(:create, %{user_id: user_id})
-                 |> Ash.create() do
-              {:ok, user} ->
-                {:ok, user}
-
-              {:error, _changeset} = error ->
-                error
-            end
+        if Snowflake.is_snowflake(user_id) do
+          :ok
+        else
+          {:error, field: :user_id, message: "must be a valid Discord snowflake"}
         end
       end
     end
