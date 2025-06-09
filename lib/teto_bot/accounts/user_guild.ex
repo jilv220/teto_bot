@@ -223,6 +223,7 @@ defmodule TetoBot.Accounts.UserGuild do
     attribute :intimacy, :integer, default: 0, allow_nil?: false, public?: true
     attribute :last_message_at, :utc_datetime, public?: true
     attribute :last_feed, :utc_datetime, public?: true
+    attribute :daily_message_count, :integer, default: 0, allow_nil?: false, public?: true
 
     # Default Ecto timestamps
     create_timestamp :inserted_at

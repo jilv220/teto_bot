@@ -48,9 +48,9 @@ defmodule TetoBot.Interactions.Teto do
         } = interaction
       ) do
     Permissions.with_whitelisted_channel(interaction, channel_id, fn ->
-      case Accounts.get_intimacy(guild_id, user_id) do
-        {:ok, intimacy} ->
-          response = build_intimacy_response(intimacy, guild_id, user_id)
+      case Accounts.get_metrics(guild_id, user_id) do
+        {:ok, metrics} ->
+          response = build_intimacy_response(metrics, guild_id, user_id)
           Responses.success(interaction, response, ephemeral: true)
 
         {:error, reason} ->
@@ -61,7 +61,7 @@ defmodule TetoBot.Interactions.Teto do
 
   @doc false
   # Builds the formatted response message containing intimacy information.
-  defp build_intimacy_response(intimacy, guild_id, user_id) do
+  defp build_intimacy_response({intimacy, daily_message_count} = _metrics, guild_id, user_id) do
     {curr, next} = Accounts.get_tier_info(intimacy)
     {curr_val, curr_tier} = curr
     {next_val, next_tier} = next
@@ -74,6 +74,7 @@ defmodule TetoBot.Interactions.Teto do
     **Relationship:** #{curr_tier}
     #{next_tier_hint_msg}
 
+    You have talked to Teto __#{daily_message_count}__ times today.
     #{feed_cooldown_msg}.
     """
   end
@@ -85,7 +86,7 @@ defmodule TetoBot.Interactions.Teto do
       "Highest Tier(#{curr_tier}) Reached"
     else
       diff = next_val - curr_val
-      "**#{diff}** More Intimacy to Reach Next Tier: #{next_tier}"
+      "__#{diff}__ More Intimacy to Reach Next Tier: #{next_tier}"
     end
   end
 
@@ -94,7 +95,7 @@ defmodule TetoBot.Interactions.Teto do
   defp get_feed_cooldown_message(guild_id, user_id) do
     case Accounts.check_feed_cooldown(guild_id, user_id) do
       {:ok, :allowed} ->
-        "You **can** feed Teto now"
+        "You __can__ feed Teto now"
 
       {:error, time_left} when is_integer(time_left) ->
         "The next feed reset is in #{Format.format_time_left(time_left)}"
