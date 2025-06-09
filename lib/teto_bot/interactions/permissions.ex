@@ -58,10 +58,12 @@ defmodule TetoBot.Interactions.Permissions do
   - fun: Function to execute if channel is whitelisted
   """
   def with_whitelisted_channel(interaction, channel_id, fun) do
-    if Channels.whitelisted?(channel_id) do
-      fun.()
-    else
-      Responses.whitelist_only(interaction)
+    case Channels.whitelisted?(channel_id) do
+      {:ok, true} ->
+        fun.()
+
+      {:ok, false} ->
+        Responses.whitelist_only(interaction)
     end
   end
 end

@@ -43,7 +43,7 @@ config :nostrum,
   ]
 
 # Ash Domains
-config :teto_bot, :ash_domains, [TetoBot.Guilds]
+config :teto_bot, :ash_domains, [TetoBot.Guilds, TetoBot.Channels]
 
 config :teto_bot, Oban,
   engine: Oban.Engines.Basic,

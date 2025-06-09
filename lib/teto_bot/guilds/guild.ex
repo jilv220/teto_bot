@@ -200,6 +200,13 @@ defmodule TetoBot.Guilds.Guild do
     update_timestamp :updated_at
   end
 
+  relationships do
+    has_many :channels, TetoBot.Channels.Channel do
+      source_attribute :guild_id
+      destination_attribute :guild_id
+    end
+  end
+
   identities do
     identity :unique_guild_id, [:guild_id]
   end

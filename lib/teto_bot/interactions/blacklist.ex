@@ -23,21 +23,30 @@ defmodule TetoBot.Interactions.Blacklist do
             ephemeral: true
           )
 
-        {:error, :not_found} ->
-          Responses.success(
-            interaction,
-            "Channel <##{channel_id}> was not found in the whitelist.",
-            ephemeral: true
-          )
-
-        {:error, reason} ->
-          Logger.error("Failed to blacklist channel <##{channel_id}>: #{inspect(reason)}")
+        {:error, error} ->
+          Logger.error("Failed to blacklist channel <##{channel_id}>: #{inspect(error)}")
+          error_msg = build_error_message(error, channel_id)
 
           Responses.error(
             interaction,
-            "An error occurred while trying to remove channel <##{channel_id}> from the whitelist."
+            error_msg
           )
       end
     end)
+  end
+
+  @spec build_error_message(any(), integer()) :: String.t()
+  defp build_error_message(error, channel_id) do
+    case error do
+      %Ash.Error.Invalid{errors: errors} ->
+        if Enum.any?(errors, &String.contains?(inspect(&1), "NotFound")) do
+          "Channel <##{channel_id}> was not found in the whitelist."
+        else
+          "Failed to blacklist channel <##{channel_id}>. Please check the logs."
+        end
+
+      _ ->
+        "Failed to blacklist channel <##{channel_id}>. Please check the logs."
+    end
   end
 end

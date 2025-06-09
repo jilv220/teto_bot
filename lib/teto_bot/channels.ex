@@ -1,84 +1,17 @@
 defmodule TetoBot.Channels do
   @moduledoc """
-  The context for managing Channels.
+  The Channels domain.
   """
-  require Nostrum.Snowflake
+  use Ash.Domain
 
-  alias Nostrum.Snowflake
-  alias TetoBot.Channels
   alias TetoBot.Channels.Channel
 
-  @repo Application.compile_env(:teto_bot, :repo, TetoBot.Repo)
-
-  @doc """
-  Whitelists a channel by its ID.
-  Inserts a new channel record into the database.
-  """
-  def whitelist_channel(guild_id, channel_id)
-      when Snowflake.is_snowflake(guild_id) and Snowflake.is_snowflake(channel_id) do
-    result =
-      %Channel{}
-      |> Channel.changeset(%{guild_id: guild_id, channel_id: channel_id})
-      |> @repo.insert([])
-
-    case result do
-      {:ok, _channel} ->
-        Channels.Cache.add(channel_id)
-        result
-
-      {:error, _changeset} = error ->
-        error
+  resources do
+    resource Channel do
+      define :whitelist_channel, args: [:guild_id, :channel_id], action: :whitelist_channel
+      define :blacklist_channel, args: [:guild_id, :channel_id], action: :blacklist_channel
+      define :whitelisted?, args: [:channel_id], action: :whitelisted_check
+      define :cache_stats, action: :cache_stats
     end
   end
-
-  def whitelist_channel(_, _), do: {:error, :invalid_id}
-
-  @doc """
-  Removes a channel from the whitelist (effectively blacklisting it).
-  Deletes the channel record from the database.
-  """
-  def blacklist_channel(guild_id, channel_id)
-      when Snowflake.is_snowflake(guild_id) and Snowflake.is_snowflake(channel_id) do
-    case @repo.get_by(Channel, [guild_id: guild_id, channel_id: channel_id], []) do
-      nil ->
-        {:error, :not_found}
-
-      channel ->
-        result = @repo.delete(channel, [])
-
-        case result do
-          {:ok, _channel} ->
-            Channels.Cache.remove(channel_id)
-            result
-
-          {:error, _changeset} = error ->
-            error
-        end
-    end
-  end
-
-  def blacklist_channel(_, _), do: {:error, :invalid_id}
-
-  @doc """
-  Checks if a channel is whitelisted.
-  """
-  @spec whitelisted?(Snowflake.t()) :: boolean()
-  def whitelisted?(channel_id) when Snowflake.is_snowflake(channel_id) do
-    case Channels.Cache.exists?(channel_id) do
-      true ->
-        true
-
-      false ->
-        case @repo.get_by(Channel, [channel_id: channel_id], []) do
-          nil ->
-            false
-
-          _ ->
-            Channels.Cache.add(channel_id)
-            true
-        end
-    end
-  end
-
-  def whitelisted?(_), do: false
 end

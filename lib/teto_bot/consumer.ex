@@ -59,30 +59,33 @@ defmodule TetoBot.Consumer do
   end
 
   def handle_event({:MESSAGE_CREATE, msg, _ws_state}) do
-    if Channels.whitelisted?(msg.channel_id) do
-      try do
-        Messages.handle_msg(msg)
-      rescue
-        e in RuntimeError ->
-          Logger.error("Message processing error: #{inspect(e)}")
-
-          cond do
-            String.starts_with?(e.message, "Audio attachment are not supported: ") ->
-              Api.Message.create(msg.channel_id,
-                content: "Voice messages are not supported yet"
-              )
-
-            true ->
-              Api.Message.create(msg.channel_id,
-                content: "Oops, something went wrong! Try again, okay?"
-              )
-          end
-
+    case Channels.whitelisted?(msg.channel_id) do
+      {:ok, true} ->
+        try do
+          Messages.handle_msg(msg)
           :ok
-      end
-    else
-      Logger.debug("Ignoring message from non-whitelisted channel: #{msg.channel_id}")
-      :ok
+        rescue
+          e in RuntimeError ->
+            Logger.error("Message processing error: #{inspect(e)}")
+
+            cond do
+              String.starts_with?(e.message, "Audio attachment are not supported: ") ->
+                Api.Message.create(msg.channel_id,
+                  content: "Voice messages are not supported yet"
+                )
+
+              true ->
+                Api.Message.create(msg.channel_id,
+                  content: "Oops, something went wrong! Try again, okay?"
+                )
+            end
+
+            :ok
+        end
+
+      {:ok, false} ->
+        Logger.debug("Ignoring message from non-whitelisted channel: #{msg.channel_id}")
+        :ok
     end
   end
 

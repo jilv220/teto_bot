@@ -23,19 +23,19 @@ defmodule TetoBot.Interactions.Whitelist do
             ephemeral: true
           )
 
-        {:error, changeset} ->
-          Logger.error("Failed to whitelist channel #{channel_id}: #{inspect(changeset.errors)}")
-          error_message = build_error_message(changeset, channel_id)
+        {:error, error} ->
+          Logger.error("Failed to whitelist channel #{channel_id}: #{inspect(error)}")
+          error_message = build_error_message(error, channel_id)
           Responses.error(interaction, error_message)
       end
     end)
   end
 
-  @spec build_error_message(Ecto.Changeset.t(), integer()) :: String.t()
-  defp build_error_message(changeset, channel_id) do
-    case Keyword.get(changeset.errors, :channel_id) do
-      {error_msg, _} when is_binary(error_msg) ->
-        if String.contains?(error_msg, "has already been taken") do
+  @spec build_error_message(any(), integer()) :: String.t()
+  defp build_error_message(error, channel_id) do
+    case error do
+      %Ash.Error.Invalid{errors: errors} ->
+        if Enum.any?(errors, &String.contains?(inspect(&1), "unique")) do
           "Channel <##{channel_id}> is already whitelisted."
         else
           "Failed to whitelist channel <##{channel_id}>. Please check the logs."
