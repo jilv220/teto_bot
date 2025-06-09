@@ -82,12 +82,16 @@ defmodule TetoBot.Guilds.Guild do
                 {:error, :not_found}
 
               {:ok, guild} ->
+                # The database-level foreign key constraint with on_delete: :delete_all
+                # will automatically handle cascading deletes for user_guilds and channels
                 case Ash.destroy(guild) do
                   :ok ->
                     Cache.remove(guild_id)
+                    Logger.info("Guild #{guild_id} deleted successfully with cascading deletes")
                     {:ok, guild}
 
                   {:error, _changeset} = error ->
+                    Logger.error("Failed to delete guild #{guild_id}: #{inspect(error)}")
                     error
                 end
 
@@ -202,6 +206,11 @@ defmodule TetoBot.Guilds.Guild do
 
   relationships do
     has_many :channels, TetoBot.Channels.Channel do
+      source_attribute :guild_id
+      destination_attribute :guild_id
+    end
+
+    has_many :user_guilds, TetoBot.Accounts.UserGuild do
       source_attribute :guild_id
       destination_attribute :guild_id
     end
