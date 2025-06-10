@@ -33,6 +33,7 @@ defmodule TetoBot.MixProject do
       {:ash, "~> 3.0"},
       # api has breaking changes... wait for 0.11
       {:nostrum, github: "Kraigie/nostrum"},
+      {:topgg_ex, "~> 0.1.0"},
       {:openai_ex, "~> 0.9.9"},
       {:tokenizers, "~> 0.3.0"},
       {:ecto_sql, "~> 3.0"},

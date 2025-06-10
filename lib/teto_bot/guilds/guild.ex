@@ -32,9 +32,11 @@ defmodule TetoBot.Guilds.Guild do
         __MODULE__
         |> Ash.Query.for_read(:read)
         |> Ash.Query.select([:guild_id])
-        |> Ash.read!()
-        |> Enum.map(& &1.guild_id)
-        |> then(&{:ok, &1})
+        |> Ash.read()
+        |> case do
+          {:ok, guilds} -> Enum.map(guilds, & &1.guild_id)
+          error -> error
+        end
       end
     end
 

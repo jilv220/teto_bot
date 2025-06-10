@@ -45,6 +45,7 @@ config :nostrum,
 # Ash Domains
 config :teto_bot, :ash_domains, [TetoBot.Guilds, TetoBot.Channels, TetoBot.Accounts]
 
+# Oban
 config :teto_bot, Oban,
   engine: Oban.Engines.Basic,
   notifier: Oban.Notifiers.Postgres,
@@ -56,14 +57,17 @@ config :teto_bot, Oban,
     {Oban.Plugins.Cron,
      crontab: [
        {"0 0 * * *", TetoBot.Accounts.DecayWorker},
-       {"0 0 * * *", TetoBot.Accounts.DailyResetWorker}
+       {"0 0 * * *", TetoBot.Accounts.DailyResetWorker},
+       {"*/30 * * * *", TetoBot.Topgg.AutopostWorker}
      ]}
   ]
 
+# App Config
 config :teto_bot,
   # Env
   env: config_env(),
   dev_guild_id: 1_374_179_000_192_339_979,
+  topgg_token: System.get_env("TOPGG_TOKEN"),
   # DB
   ecto_repos: [TetoBot.Repo],
   pool_size: 10,

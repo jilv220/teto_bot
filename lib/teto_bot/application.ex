@@ -27,6 +27,8 @@ defmodule TetoBot.Application do
       TetoBot.Guilds.Cache,
       TetoBot.Channels.Cache,
       TetoBot.Tokenizer,
+      # Finch instance for topgg API
+      {Finch, name: :topgg_finch},
       {Nostrum.Bot, bot_options}
     ]
 
