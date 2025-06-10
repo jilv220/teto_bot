@@ -1,11 +1,11 @@
 defmodule TetoBot.RateLimiter do
   @moduledoc """
-  Rate limiter for controlling user request frequency using the Hammer library.
+  Rate limiter for controlling channel request frequency using the Hammer library.
 
   Uses Hammer with ETS backend for fast, in-memory rate limiting.
-  Each user has a separate counter that resets after the configured window period.
+  Each channel has a separate counter that resets after the configured window period.
 
-  - `allow?/1` - Check if a user can make a request
+  - `allow?/1` - Check if a channel can make a request
 
   ## Configuration
 
@@ -17,7 +17,7 @@ defmodule TetoBot.RateLimiter do
 
   ## Usage
 
-      TetoBot.RateLimiter.allow?(user_id)
+      TetoBot.RateLimiter.allow?(channel_id)
       #=> true | false
 
   """
@@ -34,7 +34,7 @@ defmodule TetoBot.RateLimiter do
 
   @spec allow?(Snowflake.t()) :: boolean()
   @doc """
-  Checks if a user is allowed to make a request based on rate limiting rules.
+  Checks if a channel is allowed to make a request based on rate limiting rules.
 
   ## Examples
 
@@ -46,23 +46,23 @@ defmodule TetoBot.RateLimiter do
       #=> false
 
   """
-  def allow?(user_id) when Snowflake.is_snowflake(user_id) do
+  def allow?(channel_id) when Snowflake.is_snowflake(channel_id) do
     window = get_window_milliseconds()
     max_requests = get_max_requests()
-    key = "user:#{user_id}"
+    key = "channel:#{channel_id}"
 
     case RateLimiter.hit(key, window, max_requests) do
       {:allow, _count} ->
-        Logger.debug("Allowing request for user #{user_id}")
+        Logger.debug("Allowing request for channel #{channel_id}")
         true
 
       {:deny, _retry_after} ->
-        Logger.debug("Denying request for user #{user_id}")
+        Logger.debug("Denying request for channel #{channel_id}")
         false
     end
   end
 
-  # Guard against invalid user_id
+  # Guard against invalid channel_id
   def allow?(_), do: false
 
   # Private functions

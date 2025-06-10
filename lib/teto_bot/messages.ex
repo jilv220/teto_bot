@@ -79,10 +79,8 @@ defmodule TetoBot.Messages do
     :ok
   end
 
-  defp process_message(
-         %Struct.Message{author: %Struct.User{id: user_id}, channel_id: channel_id} = msg
-       ) do
-    if RateLimiter.allow?(user_id) do
+  defp process_message(%Struct.Message{channel_id: channel_id} = msg) do
+    if RateLimiter.allow?(channel_id) do
       generate_and_send_response!(msg)
     else
       send_rate_limit_warning(channel_id)
@@ -156,7 +154,7 @@ defmodule TetoBot.Messages do
   # Sends a rate limit warning to the channel.
   defp send_rate_limit_warning(channel_id) do
     Api.Message.create(channel_id,
-      content: "You're sending messages too quickly! Please wait a moment."
+      content: "This channel is sending messages too quickly! Please wait a moment."
     )
   end
 end

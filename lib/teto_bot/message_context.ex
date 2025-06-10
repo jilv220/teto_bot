@@ -24,13 +24,11 @@ defmodule TetoBot.MessageContext do
   """
   @spec get_context(integer()) :: [{:user | :assistant, String.t(), String.t()}]
   def get_context(channel_id) do
-    window = Application.get_env(:teto_bot, :context_window, 300)
-    max_tokens = Application.get_env(:teto_bot, :max_context_tokens, 28_000)
-
-    after_timestamp = DateTime.utc_now() |> DateTime.add(-window, :second)
+    # Best effort estimation
+    max_tokens = Application.get_env(:teto_bot, :max_context_tokens, 1_900)
 
     messages =
-      MessageCache.Mnesia.get_by_channel(channel_id, after_timestamp, :infinity)
+      MessageCache.Mnesia.get_by_channel(channel_id, 0, :infinity)
       # Filter out empty messages
       |> Enum.filter(&(&1.content != ""))
       # Reject messages from /feed
