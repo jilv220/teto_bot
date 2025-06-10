@@ -7,6 +7,7 @@ defmodule TetoBot.Accounts.User do
   require Ash.Query
   require Nostrum.Snowflake
 
+  alias TetoBot.Accounts.User
   alias Nostrum.Snowflake
 
   use Ash.Resource,
@@ -59,6 +60,7 @@ defmodule TetoBot.Accounts.User do
   attributes do
     # Use user_id as primary key (no auto-generated id) - database stores as bigint
     attribute :user_id, :integer, primary_key?: true, allow_nil?: false, public?: true
+    attribute :role, User.Role, default: :user
 
     # Default Ecto timestamps
     create_timestamp :inserted_at
