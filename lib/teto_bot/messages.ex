@@ -17,6 +17,7 @@ defmodule TetoBot.Messages do
   alias TetoBot.LLM
   alias TetoBot.Messages
   alias TetoBot.RateLimiter
+  alias TetoBot.UserRateLimiter
 
   @spec handle_msg(Nostrum.Struct.Message.t()) :: :ok
   @doc """
@@ -79,13 +80,28 @@ defmodule TetoBot.Messages do
     :ok
   end
 
-  defp process_message(%Struct.Message{channel_id: channel_id} = msg) do
-    if RateLimiter.allow?(channel_id) do
-      generate_and_send_response!(msg)
-    else
-      send_rate_limit_warning(channel_id)
+  defp process_message(
+         %Struct.Message{channel_id: channel_id, author: %Struct.User{id: user_id}} = msg
+       ) do
+    # Check both channel and user rate limits
+    channel_allowed = RateLimiter.allow?(channel_id)
 
-      :ok
+    case UserRateLimiter.allow?(user_id) do
+      {:ok, true} when channel_allowed ->
+        generate_and_send_response!(msg)
+
+      {:ok, true} ->
+        send_rate_limit_warning(channel_id, :channel)
+        :ok
+
+      {:ok, false} ->
+        send_user_rate_limit_warning(channel_id, user_id)
+        :ok
+
+      {:error, reason} ->
+        Logger.error("Failed to check user rate limit for #{user_id}: #{inspect(reason)}")
+        send_rate_limit_warning(channel_id, :error)
+        :ok
     end
   end
 
@@ -152,9 +168,42 @@ defmodule TetoBot.Messages do
 
   @doc false
   # Sends a rate limit warning to the channel.
-  defp send_rate_limit_warning(channel_id) do
+  defp send_rate_limit_warning(channel_id, :channel) do
     Api.Message.create(channel_id,
       content: "This channel is sending messages too quickly! Please wait a moment."
     )
+  end
+
+  defp send_rate_limit_warning(channel_id, :error) do
+    Api.Message.create(channel_id,
+      content: "Sorry, there was an error checking your message limit. Please try again later."
+    )
+  end
+
+  @doc false
+  # Sends a user-specific rate limit warning.
+  defp send_user_rate_limit_warning(channel_id, user_id) do
+    case UserRateLimiter.get_user_status(user_id) do
+      {:ok, status} ->
+        message = build_rate_limit_message(status)
+        Api.Message.create(channel_id, content: message)
+
+      {:error, _reason} ->
+        Api.Message.create(channel_id,
+          content:
+            "You've reached your daily message limit! Vote for the bot to get more messages per day."
+        )
+    end
+  end
+
+  defp build_rate_limit_message(%{is_voted_user: true, daily_limit: limit, current_count: count}) do
+    "You've reached your daily limit of #{limit} messages (#{count}/#{limit})! " <>
+      "Thanks for voting! Your limit will reset at midnight UTC."
+  end
+
+  defp build_rate_limit_message(%{daily_limit: limit, current_count: count}) do
+    "You've reached your daily limit of #{limit} messages (#{count}/#{limit})! " <>
+      "Vote for the bot on top.gg to get 30 messages per day instead of 10. " <>
+      "Your limit will reset at midnight UTC."
   end
 end

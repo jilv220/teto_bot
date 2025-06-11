@@ -62,6 +62,9 @@ defmodule TetoBot.Accounts.User do
     attribute :user_id, :integer, primary_key?: true, allow_nil?: false, public?: true
     attribute :role, User.Role, default: :user
 
+    # Vote tracking for rate limiting
+    attribute :last_voted_at, :utc_datetime, public?: true
+
     # Default Ecto timestamps
     create_timestamp :inserted_at
     update_timestamp :updated_at
@@ -71,6 +74,28 @@ defmodule TetoBot.Accounts.User do
     has_many :user_guilds, TetoBot.Accounts.UserGuild do
       source_attribute :user_id
       destination_attribute :user_id
+    end
+  end
+
+  calculations do
+    calculate :is_voted_user,
+              :boolean,
+              expr(
+                not is_nil(last_voted_at) and
+                  last_voted_at > fragment("NOW() - INTERVAL '12 hours'")
+              )
+
+    calculate :has_voted_today,
+              :boolean,
+              expr(
+                not is_nil(last_voted_at) and
+                  last_voted_at > fragment("date_trunc('day', NOW() AT TIME ZONE 'UTC')")
+              )
+  end
+
+  aggregates do
+    sum :total_daily_messages, :user_guilds, :daily_message_count do
+      default 0
     end
   end
 

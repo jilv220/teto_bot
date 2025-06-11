@@ -75,7 +75,7 @@ config :teto_bot,
   ecto_repos: [TetoBot.Repo],
   pool_size: 10,
   generators: [timestamp_type: :utc_datetime],
-  # Rate limiting
+  # Channel Rate limiting
   rate_limit_window: 60,
   rate_limit_max_requests: 16,
   # Bot settings
@@ -90,6 +90,12 @@ config :teto_bot, TetoBot.Accounts.Decay,
   inactivity_threshold: :timer.hours(24 * 3),
   decay_amount: 4,
   minimum_intimacy: 5
+
+# User rate limiting configuration
+config :teto_bot, TetoBot.UserRateLimiter,
+  free_user_daily_limit: 10,
+  voted_user_daily_limit: 30,
+  vote_benefit_hours: 12
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

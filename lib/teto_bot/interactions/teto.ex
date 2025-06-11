@@ -2,15 +2,17 @@ defmodule TetoBot.Interactions.Teto do
   @moduledoc """
   Handles Discord slash command interactions for the `/teto` command.
 
-  This module provides functionality for users to check their intimacy level
+  This module provides comprehensive functionality for users to check their intimacy level
   with Teto, view their current relationship tier, see progress toward the next
-  tier, and check their feeding cooldown status.
+  tier, check their feeding cooldown status, and view their daily message limits and voting status.
 
   ## Features
 
   - Display current intimacy points and relationship tier
   - Show progress toward next relationship tier
   - Check feed cooldown status and time remaining
+  - Display daily message limits and remaining messages
+  - Show voting status and benefits
   - Error handling for database failures
   - Channel whitelisting enforcement
 
@@ -20,7 +22,7 @@ defmodule TetoBot.Interactions.Teto do
   a user executes the `/teto` command in Discord.
 
   ## Examples
-      TetoBot.Interactions.Teto.handle_teto(interaction, user_id, guild_id, channel_id)
+      TetoBot.Interactions.Teto.handle_teto(interaction)
 
   """
 
@@ -31,13 +33,15 @@ defmodule TetoBot.Interactions.Teto do
 
   alias TetoBot.Format
   alias TetoBot.Interactions.{Permissions, Responses}
+  alias TetoBot.UserRateLimiter
 
   @spec handle_teto(Struct.Interaction.t()) :: :ok | Nostrum.Api.error()
   @doc """
   Handles the `/teto` slash command interaction.
 
-  Displays the user's current intimacy level, relationship tier, progress toward
-  the next tier, and feeding cooldown status. Only works in whitelisted channels.
+  Displays the user's comprehensive status including intimacy level, relationship tier,
+  progress toward the next tier, feeding cooldown status, daily message limits, and voting status.
+  Only works in whitelisted channels.
   """
   def handle_teto(
         %Struct.Interaction{
@@ -48,20 +52,45 @@ defmodule TetoBot.Interactions.Teto do
         } = interaction
       ) do
     Permissions.with_whitelisted_channel(interaction, channel_id, fn ->
-      case Accounts.get_metrics(guild_id, user_id) do
-        {:ok, metrics} ->
-          response = build_intimacy_response(metrics, guild_id, user_id)
+      case {Accounts.get_metrics(guild_id, user_id), UserRateLimiter.get_user_status(user_id)} do
+        {{:ok, metrics}, {:ok, status}} ->
+          response = build_combined_response(metrics, status, guild_id, user_id)
           Responses.success(interaction, response, ephemeral: true)
 
-        {:error, reason} ->
+        {{:error, reason}, _} ->
           handle_intimacy_error(interaction, reason)
+
+        {_, {:error, reason}} ->
+          handle_status_error(interaction, reason)
       end
     end)
   end
 
   @doc false
-  # Builds the formatted response message containing intimacy information.
-  defp build_intimacy_response({intimacy, daily_message_count} = _metrics, guild_id, user_id) do
+  # Builds the comprehensive response message containing both intimacy and status information.
+  defp build_combined_response(
+         {intimacy, daily_message_count} = _metrics,
+         %{
+           daily_limit: limit,
+           current_count: count,
+           remaining: remaining,
+           is_voted_user: is_voted,
+           has_voted_today: voted_today
+         } = _status,
+         guild_id,
+         user_id
+       ) do
+    intimacy_section = build_intimacy_section(intimacy, daily_message_count, guild_id, user_id)
+    message_status_section = build_message_status_section(limit, count, remaining)
+    voting_status_section = build_voting_status_section(is_voted, voted_today, limit)
+    reset_info = "🕛 Daily limits reset at **midnight UTC** each day."
+
+    intimacy_section <> message_status_section <> voting_status_section <> reset_info
+  end
+
+  @doc false
+  # Builds the intimacy and relationship information section.
+  defp build_intimacy_section(intimacy, daily_message_count, guild_id, user_id) do
     {curr, next} = Accounts.get_tier_info(intimacy)
     {curr_val, curr_tier} = curr
     {next_val, next_tier} = next
@@ -69,24 +98,47 @@ defmodule TetoBot.Interactions.Teto do
     next_tier_hint_msg = build_next_tier_message(curr_tier, next_tier, curr_val, next_val)
     feed_cooldown_msg = get_feed_cooldown_message(guild_id, user_id)
 
-    """
-    **Intimacy:** #{intimacy}
-    **Relationship:** #{curr_tier}
-    #{next_tier_hint_msg}
+    "💖 **Your Relationship with Teto**\n\n" <>
+      "• **Intimacy:** #{intimacy}\n" <>
+      "• **Relationship:** #{curr_tier}\n" <>
+      "• #{next_tier_hint_msg}\n" <>
+      "• #{feed_cooldown_msg}\n" <>
+      "• You have talked to Teto __#{daily_message_count}__ times today in this guild\n\n"
+  end
 
-    You have talked to Teto __#{daily_message_count}__ times today.
-    #{feed_cooldown_msg}.
-    """
+  @doc false
+  # Builds the daily message status section.
+  defp build_message_status_section(limit, count, remaining) do
+    "📊 **Your Daily Message Status**\n\n" <>
+      "• Messages used today: **#{count}/#{limit}**\n" <>
+      "• Messages remaining: **#{remaining}**\n\n"
+  end
+
+  @doc false
+  # Builds the voting status section.
+  defp build_voting_status_section(is_voted, voted_today, limit) do
+    if is_voted do
+      if voted_today do
+        "✅ **Voting Status**: Active (voted today)\n" <>
+          "🎉 You have **#{limit}** messages per day thanks to voting!\n\n"
+      else
+        "✅ **Voting Status**: Active (voted within 12 hours)\n" <>
+          "🎉 You have **#{limit}** messages per day thanks to voting!\n\n"
+      end
+    else
+      "❌ **Voting Status**: Not voted\n" <>
+        "💡 Vote for the bot on [top.gg](https://top.gg/bot/1374166544149512313) to get **30** messages per day instead of **10**!\n\n"
+    end
   end
 
   @doc false
   # Builds the message showing progress toward the next relationship tier.
   defp build_next_tier_message(curr_tier, next_tier, curr_val, next_val) do
     if curr_tier == next_tier do
-      "Highest Tier(#{curr_tier}) Reached"
+      "**Status:** Highest Tier (#{curr_tier}) Reached"
     else
       diff = next_val - curr_val
-      "__#{diff}__ More Intimacy to Reach Next Tier: #{next_tier}"
+      "**Next Tier:** __#{diff}__ more intimacy to reach #{next_tier}"
     end
   end
 
@@ -95,10 +147,10 @@ defmodule TetoBot.Interactions.Teto do
   defp get_feed_cooldown_message(guild_id, user_id) do
     case Accounts.check_feed_cooldown(guild_id, user_id) do
       {:ok, :allowed} ->
-        "You __can__ feed Teto now"
+        "**Feed Status:** You can feed Teto now"
 
       {:error, time_left} when is_integer(time_left) ->
-        "The next feed reset is in #{Format.format_time_left(time_left)}"
+        "**Feed Status:** Next feed available in #{Format.format_time_left(time_left)}"
     end
   end
 
@@ -120,6 +172,23 @@ defmodule TetoBot.Interactions.Teto do
     Responses.error(
       interaction,
       "Something went wrong while retrieving user intimacy info. Please try again later."
+    )
+  end
+
+  @spec handle_status_error(Struct.Interaction.t(), any()) :: :ok | Nostrum.Api.error()
+  @doc false
+  # Handles errors when retrieving status information from the rate limiter.
+  defp handle_status_error(
+         %Struct.Interaction{
+           user: %Struct.User{id: user_id}
+         } = interaction,
+         reason
+       ) do
+    Logger.error("Failed to get status for user #{user_id}: #{inspect(reason)}")
+
+    Responses.error(
+      interaction,
+      "Something went wrong while retrieving your message status. Please try again later."
     )
   end
 end

@@ -24,6 +24,14 @@ defmodule TetoBot.Web.Router do
         %{"user" => user_id, "type" => "upvote", "bot" => bot_id} ->
           Logger.info("User #{user_id} voted for bot #{bot_id}!")
 
+          case TetoBot.UserRateLimiter.record_vote(String.to_integer(user_id)) do
+            :ok ->
+              Logger.info("Successfully recorded vote for user #{user_id}")
+
+            {:error, reason} ->
+              Logger.error("Failed to record vote for user #{user_id}: #{inspect(reason)}")
+          end
+
         %{"user" => user_id, "type" => "test"} ->
           Logger.info("Test webhook from user: #{user_id}")
       end

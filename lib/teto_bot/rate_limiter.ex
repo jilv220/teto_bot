@@ -57,8 +57,13 @@ defmodule TetoBot.RateLimiter do
         true
 
       {:deny, _retry_after} ->
-        Logger.debug("Denying request for channel #{channel_id}")
-        false
+        if Application.get_env(:teto_bot, :env) == :dev do
+          # Bypass rate limit in dev
+          true
+        else
+          Logger.debug("Denying request for channel #{channel_id}")
+          false
+        end
     end
   end
 

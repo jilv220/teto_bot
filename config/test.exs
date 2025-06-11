@@ -4,7 +4,7 @@ config :ash, :disable_async?, true
 config :ash, :missed_notifications, :ignore
 
 config :teto_bot, Oban, testing: :manual
-config :logger, :console, metadata: [:shard, :guild, :channel, :bot]
+config :logger, :console, level: :warning
 
 config :teto_bot, TetoBot.Repo,
   url:
