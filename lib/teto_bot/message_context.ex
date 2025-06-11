@@ -7,7 +7,7 @@ defmodule TetoBot.MessageContext do
   token limits while maintaining conversation quality.
 
   Configuration keys under `:teto_bot`:
-    - `:context_window`: Time window in seconds for retrieving messages (default: 300)
+    - `:context_window`: Time window in seconds for retrieving messages (default: 900)
     - `:max_context_tokens`: Maximum tokens for context (default: 28000)
   """
 
@@ -24,11 +24,14 @@ defmodule TetoBot.MessageContext do
   """
   @spec get_context(integer()) :: [{:user | :assistant, String.t(), String.t()}]
   def get_context(channel_id) do
+    window = Application.get_env(:teto_bot, :context_window, 900)
     # Best effort estimation
     max_tokens = Application.get_env(:teto_bot, :max_context_tokens, 1_900)
 
+    after_timestamp = DateTime.utc_now() |> DateTime.add(-window, :second)
+
     messages =
-      MessageCache.Mnesia.get_by_channel(channel_id, 0, :infinity)
+      MessageCache.Mnesia.get_by_channel(channel_id, after_timestamp, :infinity)
       # Filter out empty messages
       |> Enum.filter(&(&1.content != ""))
       # Reject messages from /feed
