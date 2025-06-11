@@ -9,7 +9,6 @@ defmodule TetoBot.Web.Router do
   @topgg_web_auth_token Application.compile_env(:teto_bot, :topgg_web_auth_token)
 
   plug(Plug.Logger)
-
   plug(:match)
   plug(:dispatch)
 
@@ -20,41 +19,15 @@ defmodule TetoBot.Web.Router do
 
   post "/webhook" do
     conn
-    |> TopggEx.Webhook.verify_and_parse(@topgg_web_auth_token)
-    |> case do
-      {:ok, %{"user" => user_id, "type" => "upvote", "isWeekend" => true}} ->
-        Logger.info("Received vote from #{user_id}")
-        send_resp(conn, 200, "")
+    |> TopggEx.Webhook.handle_webhook(@topgg_web_auth_token, fn payload ->
+      case payload do
+        %{"user" => user_id, "type" => "upvote", "bot" => bot_id} ->
+          Logger.info("User #{user_id} voted for bot #{bot_id}!")
 
-      {:ok, %{"user" => user_id, "type" => "upvote", "isWeekend" => false}} ->
-        Logger.info("Received a test vote from #{user_id}")
-        send_resp(conn, 200, "")
-
-      {:ok, %{"user" => user_id, "type" => "test"}} ->
-        Logger.info("Received a test vote from #{user_id}")
-        send_resp(conn, 200, "")
-
-      {:error, :invalid_payload_format} ->
-        conn
-        |> send_resp(400, "Invalid payload format")
-
-      {:error, {:missing_fields, fields}} ->
-        conn
-        |> send_resp(400, "Missing required fields: #{Enum.join(fields, ", ")}")
-
-      {:error, {:invalid_field_type, field}} ->
-        conn
-        |> send_resp(400, "Invalid type for field: #{field}")
-
-      {:error, :unauthorized} ->
-        send_resp(conn, 403, Jason.encode!(%{error: "Unauthorized"}))
-
-      {:error, :invalid_body} ->
-        send_resp(conn, 400, Jason.encode!(%{error: "Invalid body"}))
-
-      {:error, :malformed_request} ->
-        send_resp(conn, 422, Jason.encode!(%{error: "Malformed request"}))
-    end
+        %{"user" => user_id, "type" => "test"} ->
+          Logger.info("Test webhook from user: #{user_id}")
+      end
+    end)
   end
 
   # Catch-all for unmatched routes
