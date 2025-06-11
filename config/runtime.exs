@@ -26,5 +26,6 @@ if config_env() == :prod do
 
   config :teto_bot,
     redis_url: redis_url,
-    redis_socket_options: maybe_ipv6
+    redis_socket_options: maybe_ipv6,
+    http_port: String.to_integer(System.get_env("PORT") || System.get_env("HTTP_PORT") || "4000")
 end

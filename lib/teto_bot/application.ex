@@ -19,6 +19,10 @@ defmodule TetoBot.Application do
       name: :redix, socket_opts: Application.get_env(:teto_bot, :redis_socket_options)
     }
 
+    # HTTP server configuration
+    http_port = Application.get_env(:teto_bot, :http_port, 4000)
+    cowboy_options = [port: http_port]
+
     children = [
       {Redix, redis_options},
       TetoBot.Repo,
@@ -29,15 +33,18 @@ defmodule TetoBot.Application do
       TetoBot.Tokenizer,
       # Finch instance for topgg API
       {Finch, name: :topgg_finch},
-      {Nostrum.Bot, bot_options}
+      {Nostrum.Bot, bot_options},
+      {Plug.Cowboy, scheme: :http, plug: TetoBot.Web, options: cowboy_options}
     ]
 
     result = Supervisor.start_link(children, strategy: :one_for_one)
 
-    # Warm Cache
     unless Application.get_env(:teto_bot, :env) == :test do
+      # Warm Cache
       Task.start(fn -> TetoBot.Guilds.warm_cache() end)
     end
+
+    Logger.info("HTTP server started on port #{http_port}")
 
     result
   end
