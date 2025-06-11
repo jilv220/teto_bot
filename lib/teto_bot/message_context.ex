@@ -92,7 +92,7 @@ defmodule TetoBot.MessageContext do
   defp apply_silence_gap(messages, silence_gap) when is_integer(silence_gap) do
     messages_desc = Enum.reverse(messages)
 
-    {selected_desc, _last_ts} =
+    {selected_asc, _last_ts} =
       Enum.reduce_while(messages_desc, {[], nil}, fn {_, _, _, timestamp} = msg, {acc, last_ts} ->
         cond do
           # First message: always keep it
@@ -109,7 +109,7 @@ defmodule TetoBot.MessageContext do
         end
       end)
 
-    Enum.reverse(selected_desc)
+    selected_asc
   end
 
   defp apply_silence_gap(messages, _), do: messages
