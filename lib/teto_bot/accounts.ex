@@ -8,7 +8,7 @@ defmodule TetoBot.Accounts do
 
   require Ash.Query
 
-  alias TetoBot.Accounts.{User, UserGuild, Tier, DecayWorker, DailyResetWorker}
+  alias TetoBot.Accounts.{DailyResetWorker, DecayWorker, Tier, User, UserGuild}
 
   resources do
     resource User do
@@ -91,58 +91,54 @@ defmodule TetoBot.Accounts do
   """
   @spec increment_intimacy(integer(), integer(), integer(), keyword()) :: :ok | {:error, term()}
   def increment_intimacy(guild_id, user_id, increment, opts \\ []) do
-    # Get current intimacy
-    case get_intimacy(guild_id, user_id) do
-      {:ok, current_intimacy} ->
-        new_intimacy = current_intimacy + increment
+    with {:ok, current_intimacy} <- get_intimacy(guild_id, user_id),
+         new_intimacy <- current_intimacy + increment,
+         {:ok, _} <- handle_intimacy_update(guild_id, user_id, new_intimacy, opts) do
+      :ok
+    end
+  end
 
-        # Update intimacy and potentially last_message_at
-        case get_membership(user_id, guild_id) do
-          {:ok, nil} ->
-            # Create membership if it doesn't exist
-            case create_membership(user_id, guild_id) do
-              {:ok, user_guild} ->
-                update_attrs = %{intimacy: new_intimacy}
+  @spec handle_intimacy_update(integer(), integer(), integer(), keyword()) ::
+          {:ok, term()} | {:error, term()}
+  defp handle_intimacy_update(guild_id, user_id, new_intimacy, opts) do
+    with {:ok, membership_result} <- ensure_membership_for_intimacy(guild_id, user_id),
+         {:ok, updated_membership} <-
+           apply_intimacy_update(membership_result, user_id, guild_id, new_intimacy) do
+      maybe_update_last_message(updated_membership, user_id, guild_id, opts)
+    end
+  end
 
-                update_attrs =
-                  if opts[:update_message_at] do
-                    Map.put(update_attrs, :last_message_at, DateTime.utc_now())
-                  else
-                    update_attrs
-                  end
-
-                case user_guild
-                     |> Ash.Changeset.for_update(:update, update_attrs)
-                     |> Ash.update() do
-                  {:ok, _} -> :ok
-                  error -> error
-                end
-
-              error ->
-                error
-            end
-
-          {:ok, user_guild} ->
-            update_attrs = %{intimacy: new_intimacy}
-
-            update_attrs =
-              if opts[:update_message_at] do
-                Map.put(update_attrs, :last_message_at, DateTime.utc_now())
-              else
-                update_attrs
-              end
-
-            case user_guild |> Ash.Changeset.for_update(:update, update_attrs) |> Ash.update() do
-              {:ok, _} -> :ok
-              error -> error
-            end
-
-          error ->
-            error
+  @spec ensure_membership_for_intimacy(integer(), integer()) ::
+          {:ok, :new | :existing} | {:error, term()}
+  defp ensure_membership_for_intimacy(guild_id, user_id) do
+    case get_membership(user_id, guild_id) do
+      {:ok, nil} ->
+        case create_membership(user_id, guild_id) do
+          {:ok, _membership} -> {:ok, :new}
+          error -> error
         end
+
+      {:ok, _membership} ->
+        {:ok, :existing}
 
       error ->
         error
+    end
+  end
+
+  @spec apply_intimacy_update(:new | :existing, integer(), integer(), integer()) ::
+          {:ok, term()} | {:error, term()}
+  defp apply_intimacy_update(_membership_status, user_id, guild_id, new_intimacy) do
+    update_intimacy(user_id, guild_id, new_intimacy)
+  end
+
+  @spec maybe_update_last_message(term(), integer(), integer(), keyword()) ::
+          {:ok, term()} | {:error, term()}
+  defp maybe_update_last_message(updated_membership, user_id, guild_id, opts) do
+    if opts[:update_message_at] do
+      update_last_message(user_id, guild_id)
+    else
+      {:ok, updated_membership}
     end
   end
 
@@ -180,51 +176,35 @@ defmodule TetoBot.Accounts do
   """
   @spec feed_teto(integer(), integer(), integer()) :: {:ok, map()} | {:error, any()}
   def feed_teto(guild_id, user_id, increment) do
-    # Ensure user and membership exist
-    case get_membership(user_id, guild_id) do
-      {:ok, nil} ->
-        # Create user and membership first
-        case create_membership(user_id, guild_id) do
-          {:ok, user_guild} ->
-            now = DateTime.utc_now()
-
-            case user_guild
-                 |> Ash.Changeset.for_update(:update, %{
-                   last_feed: now,
-                   intimacy: increment
-                 })
-                 |> Ash.update() do
-              {:ok, updated_user_guild} ->
-                {:ok, %{user_guild: updated_user_guild}}
-
-              error ->
-                error
-            end
-
-          error ->
-            error
-        end
-
-      {:ok, user_guild} ->
-        now = DateTime.utc_now()
-        new_intimacy = user_guild.intimacy + increment
-
-        case user_guild
-             |> Ash.Changeset.for_update(:update, %{
-               last_feed: now,
-               intimacy: new_intimacy
-             })
-             |> Ash.update() do
-          {:ok, updated_user_guild} ->
-            {:ok, %{user_guild: updated_user_guild}}
-
-          error ->
-            error
-        end
-
-      error ->
-        error
+    with {:ok, user_guild_result} <- ensure_membership_exists(guild_id, user_id),
+         {:ok, updated_user_guild} <- apply_feed_update(user_guild_result, increment) do
+      {:ok, %{user_guild: updated_user_guild}}
     end
+  end
+
+  @spec apply_feed_update({:new | :existing, UserGuild.t()}, integer()) ::
+          {:ok, UserGuild.t()} | {:error, any()}
+  defp apply_feed_update({:new, user_guild}, increment) do
+    now = DateTime.utc_now()
+
+    user_guild
+    |> Ash.Changeset.for_update(:update, %{
+      last_feed: now,
+      intimacy: increment
+    })
+    |> Ash.update()
+  end
+
+  defp apply_feed_update({:existing, user_guild}, increment) do
+    now = DateTime.utc_now()
+    new_intimacy = user_guild.intimacy + increment
+
+    user_guild
+    |> Ash.Changeset.for_update(:update, %{
+      last_feed: now,
+      intimacy: new_intimacy
+    })
+    |> Ash.update()
   end
 
   @doc """
@@ -234,57 +214,69 @@ defmodule TetoBot.Accounts do
   """
   @spec update_user_metrics(integer(), integer()) :: {:ok, map()} | {:error, any()}
   def update_user_metrics(guild_id, user_id) do
-    case get_membership(user_id, guild_id) do
-      {:ok, nil} ->
-        # Create user and membership first
-        case create_membership(user_id, guild_id) do
-          {:ok, user_guild} ->
-            now = DateTime.utc_now()
-            daily_message_count = 1
-            intimacy_increment = calculate_intimacy_increment(daily_message_count)
-
-            case user_guild
-                 |> Ash.Changeset.for_update(:update, %{
-                   last_message_at: now,
-                   intimacy: intimacy_increment,
-                   daily_message_count: daily_message_count
-                 })
-                 |> Ash.update() do
-              {:ok, updated_user_guild} ->
-                {:ok, %{user_guild: updated_user_guild}}
-
-              error ->
-                error
-            end
-
-          error ->
-            error
-        end
-
-      {:ok, user_guild} ->
-        now = DateTime.utc_now()
-        new_daily_count = user_guild.daily_message_count + 1
-
-        intimacy_increment = calculate_intimacy_increment(new_daily_count)
-        new_intimacy = user_guild.intimacy + intimacy_increment
-
-        case user_guild
-             |> Ash.Changeset.for_update(:update, %{
-               last_message_at: now,
-               intimacy: new_intimacy,
-               daily_message_count: new_daily_count
-             })
-             |> Ash.update() do
-          {:ok, updated_user_guild} ->
-            {:ok, %{user_guild: updated_user_guild}}
-
-          error ->
-            error
-        end
-
-      error ->
-        error
+    with {:ok, user_guild_result} <- ensure_membership_exists(guild_id, user_id),
+         {:ok, updated_user_guild} <- update_metrics_for_existing_membership(user_guild_result) do
+      {:ok, %{user_guild: updated_user_guild}}
     end
+  end
+
+  @spec ensure_membership_exists(integer(), integer()) ::
+          {:ok, {:new, UserGuild.t()} | {:existing, UserGuild.t()}} | {:error, any()}
+  defp ensure_membership_exists(guild_id, user_id) do
+    case get_membership(user_id, guild_id) do
+      {:ok, nil} -> create_new_membership_for_metrics(user_id, guild_id)
+      {:ok, user_guild} -> {:ok, {:existing, user_guild}}
+      error -> error
+    end
+  end
+
+  @spec create_new_membership_for_metrics(integer(), integer()) ::
+          {:ok, {:new, UserGuild.t()}} | {:error, any()}
+  defp create_new_membership_for_metrics(user_id, guild_id) do
+    case create_membership(user_id, guild_id) do
+      {:ok, user_guild} -> {:ok, {:new, user_guild}}
+      error -> error
+    end
+  end
+
+  @spec update_metrics_for_existing_membership({:new | :existing, UserGuild.t()}) ::
+          {:ok, UserGuild.t()} | {:error, any()}
+  defp update_metrics_for_existing_membership({membership_type, user_guild}) do
+    now = DateTime.utc_now()
+    metrics = calculate_new_metrics({membership_type, user_guild})
+
+    user_guild
+    |> Ash.Changeset.for_update(:update, %{
+      last_message_at: now,
+      intimacy: metrics.new_intimacy,
+      daily_message_count: metrics.new_daily_count
+    })
+    |> Ash.update()
+  end
+
+  @spec calculate_new_metrics({:new | :existing, UserGuild.t()}) :: %{
+          new_intimacy: integer(),
+          new_daily_count: integer()
+        }
+  defp calculate_new_metrics({:new, _user_guild}) do
+    daily_message_count = 1
+    intimacy_increment = calculate_intimacy_increment(daily_message_count)
+
+    %{
+      new_intimacy: intimacy_increment,
+      new_daily_count: daily_message_count
+    }
+  end
+
+  defp calculate_new_metrics({:existing, user_guild}) do
+    new_daily_count = user_guild.daily_message_count + 1
+    intimacy_increment = calculate_intimacy_increment(new_daily_count)
+    new_intimacy = user_guild.intimacy + intimacy_increment
+
+    %{
+      new_intimacy: new_intimacy,
+      new_daily_count: new_daily_count
+    }
   end
 
   defp calculate_intimacy_increment(daily_message_count) do

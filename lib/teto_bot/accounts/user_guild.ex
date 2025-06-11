@@ -257,22 +257,6 @@ defmodule TetoBot.Accounts.UserGuild do
     end
   end
 
-  calculations do
-    calculate :tier_name, :string, expr(fragment("CASE
-          WHEN ? >= 1000 THEN 'Husband'
-          WHEN ? >= 500 THEN 'Best Friend'
-          WHEN ? >= 200 THEN 'Close Friend'
-          WHEN ? >= 101 THEN 'Good Friend'
-          WHEN ? >= 51 THEN 'Friend'
-          WHEN ? >= 21 THEN 'Buddy'
-          WHEN ? >= 11 THEN 'Acquaintance'
-          WHEN ? >= 5 THEN 'Familiar Face'
-          ELSE 'Stranger'
-        END", intimacy, intimacy, intimacy, intimacy, intimacy, intimacy, intimacy, intimacy))
-
-    calculate :is_inactive, :boolean, expr(is_nil(last_message_at) and is_nil(last_feed))
-  end
-
   identities do
     identity :unique_user_guild, [:user_id, :guild_id]
   end

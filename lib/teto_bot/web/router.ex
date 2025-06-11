@@ -6,8 +6,6 @@ defmodule TetoBot.Web.Router do
   use Plug.Router
   require Logger
 
-  @topgg_web_auth_token Application.compile_env(:teto_bot, :topgg_web_auth_token)
-
   plug(Plug.Logger)
   plug(:match)
   plug(:dispatch)
@@ -19,7 +17,7 @@ defmodule TetoBot.Web.Router do
 
   post "/webhook" do
     conn
-    |> TopggEx.Webhook.handle_webhook(@topgg_web_auth_token, fn payload ->
+    |> TopggEx.Webhook.handle_webhook(get_topgg_web_auth_token(), fn payload ->
       case payload do
         %{"user" => user_id, "type" => "upvote", "bot" => bot_id} ->
           Logger.info("User #{user_id} voted for bot #{bot_id}!")
@@ -48,5 +46,9 @@ defmodule TetoBot.Web.Router do
     conn
     |> put_resp_content_type("application/json")
     |> send_resp(status, Jason.encode!(data))
+  end
+
+  defp get_topgg_web_auth_token do
+    Application.get_env(:teto_bot, :topgg_web_auth_token)
   end
 end

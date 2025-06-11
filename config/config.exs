@@ -77,7 +77,11 @@ config :teto_bot,
   generators: [timestamp_type: :utc_datetime],
   # Channel Rate limiting
   rate_limit_window: 60,
-  rate_limit_max_requests: 16,
+  rate_limit_max_requests: 20,
+  # Conversion Context
+  lookback_window: 86_400,
+  silence_gap: 10_800,
+  max_context_tokens: 2_000,
   # Bot settings
   llm_model_name: "meta-llama/llama-4-maverick-17b-128e-instruct",
   llm_vision_model_name: "meta-llama/llama-4-maverick-17b-128e-instruct",

@@ -192,7 +192,7 @@ defmodule TetoBot.Messages do
         Api.Message.create(channel_id,
           content:
             "You've reached your daily message limit! Vote for the bot to get more messages per day.\n" <>
-              "#{TetoBot.get_vote_url()})"
+              "#{TetoBot.Constants.vote_url()})"
         )
     end
   end

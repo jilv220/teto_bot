@@ -10,4 +10,5 @@ defmodule TetoBot.Constants do
 
   def interaction_response_type, do: @interaction_response_type
   def ephemeral_flag, do: @ephemeral_flag
+  def vote_url, do: "https://top.gg/bot/1374166544149512313"
 end
