@@ -127,7 +127,7 @@ defmodule TetoBot.Interactions.Teto do
       end
     else
       "❌ **Voting Status**: Not voted\n" <>
-        "💡 Vote for the bot on [top.gg](https://top.gg/bot/1374166544149512313) to get **30** messages per day instead of **10**!\n\n"
+        "💡 Vote for the bot on [top.gg](#{TetoBot.get_vote_url()}) to get **30** messages per day instead of **10**!\n\n"
     end
   end
 
