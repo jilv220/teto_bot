@@ -34,7 +34,7 @@ defmodule TetoBot.Application do
       # Finch instance for topgg API
       {Finch, name: :topgg_finch},
       {Nostrum.Bot, bot_options},
-      {Plug.Cowboy, scheme: :http, plug: TetoBot.Web, options: cowboy_options}
+      {Plug.Cowboy, scheme: :http, plug: TetoBot.Web.Router, options: cowboy_options}
     ]
 
     result = Supervisor.start_link(children, strategy: :one_for_one)

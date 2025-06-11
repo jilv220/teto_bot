@@ -58,7 +58,7 @@ config :teto_bot, Oban,
      crontab: [
        {"0 0 * * *", TetoBot.Accounts.DecayWorker},
        {"0 0 * * *", TetoBot.Accounts.DailyResetWorker},
-       {"*/30 * * * *", TetoBot.Topgg.AutopostWorker}
+       {"*/30 * * * *", TetoBot.Web.AutopostWorker}
      ]}
   ]
 

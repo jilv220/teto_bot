@@ -1,4 +1,4 @@
-defmodule TetoBot.Topgg.AutopostWorker do
+defmodule TetoBot.Web.AutopostWorker do
   @moduledoc """
 
   """
