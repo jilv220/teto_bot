@@ -116,7 +116,7 @@ defmodule TetoBot.Messages do
       id: message_id
     } = msg
 
-    Logger.info("New msg from #{username}: #{inspect(msg.content)}")
+    Logger.info("Message received - User: #{username}(#{user_id}) from (Guild: #{guild_id})")
 
     msg
     |> Messages.Attachment.process_attachments()
