@@ -36,8 +36,8 @@ defmodule TetoBot.RateLimiting.UserLimiter do
 
   # Default configuration
   @defaults [
-    daily_credit_recharge: 10,
-    vote_credit_bonus: 10
+    daily_credit_recharge: 30,
+    vote_credit_bonus: 30
   ]
 
   @type status_result ::

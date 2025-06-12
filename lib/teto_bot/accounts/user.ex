@@ -66,7 +66,8 @@ defmodule TetoBot.Accounts.User do
     attribute :last_voted_at, :utc_datetime, public?: true
 
     # Message credits for charging system
-    attribute :message_credits, :integer, default: 10, allow_nil?: false, public?: true
+    # New user get 30 credits by default
+    attribute :message_credits, :integer, default: 30, allow_nil?: false, public?: true
 
     # Default Ecto timestamps
     create_timestamp :inserted_at

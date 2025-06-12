@@ -116,11 +116,11 @@ defmodule TetoBot.Interactions.Teto do
   defp build_voting_status_section(is_voted) do
     if is_voted do
       "✅ **Voting Status**: Active (voted since last reset)\n" <>
-        "🎉 Thanks for voting! Vote again to get **#{get_vote_credit_bonus()} more credits** immediately!\n\n"
+        "🎉 Thanks for voting! Vote again to get **#{RateLimiting.get_vote_credit_bonus()} more credits** immediately!\n\n"
     else
       "❌ **Voting Status**: Not voted\n" <>
         "💡 Vote for the bot on [top.gg](#{TetoBot.Constants.vote_url()}) " <>
-        "to get **#{get_vote_credit_bonus()} credits** immediately!\n\n"
+        "to get **#{RateLimiting.get_vote_credit_bonus()} credits** immediately!\n\n"
     end
   end
 
@@ -183,10 +183,5 @@ defmodule TetoBot.Interactions.Teto do
       interaction,
       "Something went wrong while retrieving your message status. Please try again later."
     )
-  end
-
-  defp get_vote_credit_bonus do
-    user_config = RateLimiting.get_user_config()
-    user_config.vote_credit_bonus
   end
 end

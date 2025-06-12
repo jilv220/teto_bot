@@ -16,6 +16,7 @@ defmodule TetoBot.Accounts.DailyResetWorker do
   require Ash.Query
 
   alias TetoBot.Accounts.{User, UserGuild}
+  alias TetoBot.RateLimiting
 
   @impl Oban.Worker
   def perform(_job) do
@@ -56,7 +57,7 @@ defmodule TetoBot.Accounts.DailyResetWorker do
       {:ok, users} ->
         credit_count =
           Enum.reduce(users, 0, fn user, count ->
-            new_credits = user.message_credits + 10
+            new_credits = user.message_credits + RateLimiting.get_daily_credit_recharge()
 
             case user
                  |> Ash.Changeset.for_update(:update, %{message_credits: new_credits})

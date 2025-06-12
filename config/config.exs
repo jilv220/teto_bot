@@ -69,22 +69,19 @@ config :teto_bot,
   dev_guild_id: 1_374_179_000_192_339_979,
   topgg_token: System.get_env("TOPGG_TOKEN"),
   topgg_web_auth_token: System.get_env("TOPGG_WEB_AUTH_TOKEN"),
-  # HTTP Server
+  # HTTP Server ??
   http_port: 4000,
   # DB
   ecto_repos: [TetoBot.Repo],
   pool_size: 10,
   generators: [timestamp_type: :utc_datetime],
-  # Channel Rate limiting
-  rate_limit_window: 60,
-  rate_limit_max_requests: 20,
   # Conversion Context
   lookback_window: 86_400,
   silence_gap: 10_800,
   max_context_tokens: 2_000,
   # Bot settings
-  llm_model_name: "meta-llama/llama-4-maverick-17b-128e-instruct",
-  llm_vision_model_name: "meta-llama/llama-4-maverick-17b-128e-instruct",
+  llm_model_name: "llama-3.1-8b-instant",
+  llm_vision_model_name: "meta-llama/llama-4-scout-17b-6e-instruct",
   llm_max_words: 100,
   llm_temperature: 0.8,
   llm_top_p: 1,
@@ -98,8 +95,8 @@ config :teto_bot, TetoBot.Accounts.Decay,
 config :teto_bot, TetoBot.RateLimiting,
   rate_limit_window: 60,
   rate_limit_max_requests: 20,
-  daily_credit_recharge: 10,
-  vote_credit_bonus: 10
+  daily_credit_recharge: 30,
+  vote_credit_bonus: 30
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

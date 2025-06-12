@@ -68,4 +68,6 @@ defmodule TetoBot.RateLimiting do
   Returns the current configuration for the credit system.
   """
   defdelegate get_user_config(), to: UserLimiter, as: :get_config
+  def get_daily_credit_recharge(), do: get_user_config().daily_credit_recharge
+  def get_vote_credit_bonus(), do: get_user_config().vote_credit_bonus
 end

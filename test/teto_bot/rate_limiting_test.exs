@@ -23,6 +23,10 @@ defmodule TetoBot.RateLimitingTest do
   setup do
     # Each test gets its own database transaction that gets rolled back
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(TetoBot.Repo)
+
+    # Get configuration values to make tests flexible
+    config = RateLimiting.get_user_config()
+    {:ok, config: config}
   end
 
   # Test constants
@@ -44,37 +48,40 @@ defmodule TetoBot.RateLimitingTest do
   end
 
   describe "allow_user?/1 - credit-based rate limiting" do
-    test "allows messages for new users with default credits" do
-      # New user should start with 10 credits and be allowed
+    test "allows messages for new users with default credits", %{config: config} do
+      default_credits = config.daily_credit_recharge
+      # New user should start with default credits and be allowed
       assert {:ok, true} = RateLimiting.allow_user?(@valid_user_id)
 
       # Verify user was created with default credits and one was deducted
       {:ok, status} = RateLimiting.get_user_status(@valid_user_id)
-      # 10 - 1 = 9
-      assert status.message_credits == 9
+      # default_credits - 1 = expected_remaining
+      assert status.message_credits == default_credits - 1
     end
 
-    test "deducts one credit per message" do
+    test "deducts one credit per message", %{config: config} do
+      default_credits = config.daily_credit_recharge
       # Allow 3 messages and check credit deduction
-      # 10 -> 9
+      # default_credits -> default_credits - 1
       assert {:ok, true} = RateLimiting.allow_user?(@valid_user_id)
-      # 9 -> 8
+      # default_credits - 1 -> default_credits - 2
       assert {:ok, true} = RateLimiting.allow_user?(@valid_user_id)
-      # 8 -> 7
+      # default_credits - 2 -> default_credits - 3
       assert {:ok, true} = RateLimiting.allow_user?(@valid_user_id)
 
       {:ok, status} = RateLimiting.get_user_status(@valid_user_id)
-      assert status.message_credits == 7
+      assert status.message_credits == default_credits - 3
     end
 
-    test "blocks messages when user runs out of credits" do
-      # Deplete all credits (10 messages should be allowed)
-      for i <- 1..10 do
+    test "blocks messages when user runs out of credits", %{config: config} do
+      default_credits = config.daily_credit_recharge
+      # Deplete all credits (default_credits messages should be allowed)
+      for i <- 1..default_credits do
         assert {:ok, true} = RateLimiting.allow_user?(@valid_user_id),
                "Message #{i} should be allowed"
       end
 
-      # 11th message should be blocked (no credits left)
+      # (default_credits + 1)th message should be blocked (no credits left)
       assert {:ok, false} = RateLimiting.allow_user?(@valid_user_id)
 
       # Verify 0 credits remaining
@@ -82,7 +89,8 @@ defmodule TetoBot.RateLimitingTest do
       assert status.message_credits == 0
     end
 
-    test "credits are shared across guilds" do
+    test "credits are shared across guilds", %{config: config} do
+      default_credits = config.daily_credit_recharge
       # Credits are user-level, not per-guild
       # Setup guilds for consistency but credits should be shared
       {:ok, _guild1} = Guilds.create_guild(@valid_guild_id)
@@ -95,9 +103,9 @@ defmodule TetoBot.RateLimitingTest do
         assert {:ok, true} = RateLimiting.allow_user?(@valid_user_id)
       end
 
-      # Should have 5 credits remaining regardless of guild
+      # Should have (default_credits - 5) credits remaining regardless of guild
       {:ok, status} = RateLimiting.get_user_status(@valid_user_id)
-      assert status.message_credits == 5
+      assert status.message_credits == default_credits - 5
     end
 
     test "rejects invalid user IDs" do
@@ -108,7 +116,8 @@ defmodule TetoBot.RateLimitingTest do
   end
 
   describe "record_vote/1 - vote tracking and credit bonuses" do
-    test "successfully records a vote and adds credit bonus" do
+    test "successfully records a vote and adds credit bonus", %{config: config} do
+      vote_bonus = config.vote_credit_bonus
       # Get initial credits
       {:ok, initial_status} = RateLimiting.get_user_status(@valid_user_id)
       initial_credits = initial_status.message_credits
@@ -121,12 +130,13 @@ defmodule TetoBot.RateLimitingTest do
 
       {:ok, status} = RateLimiting.get_user_status(@valid_user_id)
       # Vote bonus
-      assert status.message_credits == initial_credits + 10
+      assert status.message_credits == initial_credits + vote_bonus
       assert status.has_voted_today == true
       assert status.is_voted_user == true
     end
 
-    test "adds credit bonus on each vote" do
+    test "adds credit bonus on each vote", %{config: config} do
+      vote_bonus = config.vote_credit_bonus
       # Record first vote
       assert :ok = RateLimiting.record_vote(@valid_user_id)
       {:ok, status1} = RateLimiting.get_user_status(@valid_user_id)
@@ -145,26 +155,29 @@ defmodule TetoBot.RateLimitingTest do
       assert :ok = RateLimiting.record_vote(@valid_user_id)
       {:ok, status2} = RateLimiting.get_user_status(@valid_user_id)
 
-      # Should have received another 10 credit bonus
-      assert status2.message_credits == credits_after_first_vote + 10
+      # Should have received another vote_bonus credit bonus
+      assert status2.message_credits == credits_after_first_vote + vote_bonus
     end
 
-    test "vote credits accumulate with existing credits" do
+    test "vote credits accumulate with existing credits", %{config: config} do
+      vote_bonus = config.vote_credit_bonus
+      default_credits = config.daily_credit_recharge
       # Use some credits first
       for _i <- 1..3 do
         assert {:ok, true} = RateLimiting.allow_user?(@valid_user_id)
       end
 
       {:ok, status_before_vote} = RateLimiting.get_user_status(@valid_user_id)
-      # Should be 7
+      # Should be default_credits - 3
       credits_before_vote = status_before_vote.message_credits
+      assert credits_before_vote == default_credits - 3
 
       # Record vote
       assert :ok = RateLimiting.record_vote(@valid_user_id)
 
       {:ok, status_after_vote} = RateLimiting.get_user_status(@valid_user_id)
-      # 7 + 10 = 17
-      assert status_after_vote.message_credits == credits_before_vote + 10
+      # (default_credits - 3) + vote_bonus
+      assert status_after_vote.message_credits == credits_before_vote + vote_bonus
     end
 
     test "rejects invalid user IDs" do
@@ -175,18 +188,20 @@ defmodule TetoBot.RateLimitingTest do
   end
 
   describe "get_user_status/1 - status retrieval" do
-    test "returns correct status for new user" do
+    test "returns correct status for new user", %{config: config} do
+      default_credits = config.daily_credit_recharge
       assert {:ok, status} = RateLimiting.get_user_status(@valid_user_id)
 
       assert %{
                # Default starting credits
-               message_credits: 10,
+               message_credits: ^default_credits,
                has_voted_today: false,
                is_voted_user: false
              } = status
     end
 
-    test "returns correct status after using credits" do
+    test "returns correct status after using credits", %{config: config} do
+      default_credits = config.daily_credit_recharge
       # Use 3 credits
       for _i <- 1..3 do
         assert {:ok, true} = RateLimiting.allow_user?(@valid_user_id)
@@ -195,14 +210,19 @@ defmodule TetoBot.RateLimitingTest do
       assert {:ok, status} = RateLimiting.get_user_status(@valid_user_id)
 
       assert %{
-               # 10 - 3 = 7
-               message_credits: 7,
+               # default_credits - 3
+               message_credits: expected_credits,
                has_voted_today: false,
                is_voted_user: false
              } = status
+
+      assert expected_credits == default_credits - 3
     end
 
-    test "returns correct status for voted user" do
+    test "returns correct status for voted user", %{config: config} do
+      default_credits = config.daily_credit_recharge
+      vote_bonus = config.vote_credit_bonus
+
       assert :ok = RateLimiting.record_vote(@valid_user_id)
 
       # Use 5 credits
@@ -213,11 +233,13 @@ defmodule TetoBot.RateLimitingTest do
       assert {:ok, status} = RateLimiting.get_user_status(@valid_user_id)
 
       assert %{
-               # 10 + 10 (vote) - 5 (used) = 15
-               message_credits: 15,
+               # default_credits + vote_bonus - 5 (used)
+               message_credits: expected_credits,
                has_voted_today: true,
                is_voted_user: true
              } = status
+
+      assert expected_credits == default_credits + vote_bonus - 5
     end
 
     test "rejects invalid user IDs" do
@@ -228,42 +250,52 @@ defmodule TetoBot.RateLimitingTest do
   end
 
   describe "get_user_config/0 - configuration access" do
-    test "returns current credit system configuration" do
-      config = RateLimiting.get_user_config()
+    test "returns current credit system configuration", %{config: config} do
+      returned_config = RateLimiting.get_user_config()
 
-      assert %{
-               daily_credit_recharge: 10,
-               vote_credit_bonus: 10
-             } = config
+      assert returned_config.daily_credit_recharge == config.daily_credit_recharge
+      assert returned_config.vote_credit_bonus == config.vote_credit_bonus
     end
   end
 
   describe "daily credit recharge system" do
-    test "users can accumulate large amounts of credits over time" do
+    test "users can accumulate large amounts of credits over time", %{config: config} do
+      default_credits = config.daily_credit_recharge
+      vote_bonus = config.vote_credit_bonus
+
       # Start with default credits
       {:ok, initial_status} = RateLimiting.get_user_status(@valid_user_id)
-      assert initial_status.message_credits == 10
+      assert initial_status.message_credits == default_credits
 
       # Simulate multiple vote bonuses (user voting every 12 hours)
-      for _i <- 1..5 do
+      vote_count = 5
+
+      for _i <- 1..vote_count do
         assert :ok = RateLimiting.record_vote(@valid_user_id)
       end
 
       {:ok, status} = RateLimiting.get_user_status(@valid_user_id)
-      # 10 + (5 * 10) = 60 credits
-      assert status.message_credits == 60
+      # default_credits + (vote_count * vote_bonus)
+      expected_credits = default_credits + vote_count * vote_bonus
+      assert status.message_credits == expected_credits
 
       # User should be able to send many messages
-      for _i <- 1..50 do
+      # Leave some credits
+      messages_to_send = min(50, expected_credits - 10)
+
+      for _i <- 1..messages_to_send do
         assert {:ok, true} = RateLimiting.allow_user?(@valid_user_id)
       end
 
       {:ok, final_status} = RateLimiting.get_user_status(@valid_user_id)
-      # 60 - 50 = 10
-      assert final_status.message_credits == 10
+      # expected_credits - messages_to_send
+      assert final_status.message_credits == expected_credits - messages_to_send
     end
 
-    test "credits persist and don't reset daily" do
+    test "credits persist and don't reset daily", %{config: config} do
+      default_credits = config.daily_credit_recharge
+      vote_bonus = config.vote_credit_bonus
+
       # This test verifies that credits accumulate and don't get reset
       # (unlike the old daily limit system)
 
@@ -273,21 +305,22 @@ defmodule TetoBot.RateLimitingTest do
       end
 
       {:ok, status} = RateLimiting.get_user_status(@valid_user_id)
-      assert status.message_credits == 7
+      assert status.message_credits == default_credits - 3
 
       # Add vote bonus
       assert :ok = RateLimiting.record_vote(@valid_user_id)
 
       {:ok, final_status} = RateLimiting.get_user_status(@valid_user_id)
-      # 7 + 10 = 17 (credits accumulated)
-      assert final_status.message_credits == 17
+      # (default_credits - 3) + vote_bonus (credits accumulated)
+      assert final_status.message_credits == default_credits - 3 + vote_bonus
     end
   end
 
   describe "edge cases and boundary conditions" do
-    test "user with 0 credits cannot send messages" do
+    test "user with 0 credits cannot send messages", %{config: config} do
+      default_credits = config.daily_credit_recharge
       # Deplete all credits
-      for _i <- 1..10 do
+      for _i <- 1..default_credits do
         assert {:ok, true} = RateLimiting.allow_user?(@valid_user_id)
       end
 
@@ -301,7 +334,8 @@ defmodule TetoBot.RateLimitingTest do
       assert status2.message_credits == 0
     end
 
-    test "voting when already voted today still adds credits" do
+    test "voting when already voted today still adds credits", %{config: config} do
+      vote_bonus = config.vote_credit_bonus
       # Record first vote
       assert :ok = RateLimiting.record_vote(@valid_user_id)
       {:ok, status1} = RateLimiting.get_user_status(@valid_user_id)
@@ -312,39 +346,49 @@ defmodule TetoBot.RateLimitingTest do
       {:ok, status2} = RateLimiting.get_user_status(@valid_user_id)
 
       # Should still get credit bonus
-      assert status2.message_credits == credits_after_first + 10
+      assert status2.message_credits == credits_after_first + vote_bonus
     end
 
-    test "large credit amounts work correctly" do
+    test "large credit amounts work correctly", %{config: config} do
+      default_credits = config.daily_credit_recharge
+      vote_bonus = config.vote_credit_bonus
+
       # Simulate user with many votes over time
-      for _i <- 1..20 do
+      vote_count = 20
+
+      for _i <- 1..vote_count do
         assert :ok = RateLimiting.record_vote(@valid_user_id)
       end
 
       {:ok, status} = RateLimiting.get_user_status(@valid_user_id)
-      # 10 + (20 * 10) = 210
-      assert status.message_credits == 210
+      # default_credits + (vote_count * vote_bonus)
+      expected_total = default_credits + vote_count * vote_bonus
+      assert status.message_credits == expected_total
 
       # Should be able to send many messages
-      for _i <- 1..100 do
+      # Leave some credits
+      messages_to_send = min(100, expected_total - 10)
+
+      for _i <- 1..messages_to_send do
         assert {:ok, true} = RateLimiting.allow_user?(@valid_user_id)
       end
 
       {:ok, final_status} = RateLimiting.get_user_status(@valid_user_id)
-      # 210 - 100 = 110
-      assert final_status.message_credits == 110
+      # expected_total - messages_to_send
+      assert final_status.message_credits == expected_total - messages_to_send
     end
   end
 
   describe "combined rate limiting behavior" do
-    test "both channel and user limits must allow for message processing" do
+    test "both channel and user limits must allow for message processing", %{config: config} do
+      default_credits = config.daily_credit_recharge
       # Both should initially allow
       assert true = RateLimiting.allow_channel?(@valid_channel_id)
       assert {:ok, true} = RateLimiting.allow_user?(@valid_user_id)
 
       # If user runs out of credits, channel being allowed shouldn't matter
-      # Use remaining 9 credits (1 already used above)
-      for _i <- 1..9 do
+      # Use remaining (default_credits - 1) credits (1 already used above)
+      for _i <- 1..(default_credits - 1) do
         assert {:ok, true} = RateLimiting.allow_user?(@valid_user_id)
       end
 
