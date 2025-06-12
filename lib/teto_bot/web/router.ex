@@ -32,6 +32,8 @@ defmodule TetoBot.Web.Router do
 
         %{"user" => user_id, "type" => "test"} ->
           Logger.info("Test webhook from user: #{user_id}")
+
+          ## TODO: Handle weekend bonus for Topgg Voting
       end
     end)
   end

@@ -72,15 +72,14 @@ defmodule TetoBot.Interactions.Teto do
          {intimacy, daily_message_count} = _metrics,
          %{
            message_credits: credits,
-           is_voted_user: is_voted,
-           has_voted_today: voted_today
+           is_voted_user: is_voted
          } = _status,
          guild_id,
          user_id
        ) do
     intimacy_section = build_intimacy_section(intimacy, daily_message_count, guild_id, user_id)
     message_status_section = build_message_status_section(credits)
-    voting_status_section = build_voting_status_section(is_voted, voted_today)
+    voting_status_section = build_voting_status_section(is_voted)
     reset_info = "🕛 Daily credit recharge happens at **midnight UTC (12am)** each day."
 
     intimacy_section <> message_status_section <> voting_status_section <> reset_info
@@ -114,13 +113,14 @@ defmodule TetoBot.Interactions.Teto do
 
   @doc false
   # Builds the voting status section.
-  defp build_voting_status_section(is_voted, _voted_today) do
+  defp build_voting_status_section(is_voted) do
     if is_voted do
       "✅ **Voting Status**: Active (voted since last reset)\n" <>
-        "🎉 Thanks for voting! Vote again to get **10 more credits** immediately!\n\n"
+        "🎉 Thanks for voting! Vote again to get **#{get_vote_credit_bonus()} more credits** immediately!\n\n"
     else
       "❌ **Voting Status**: Not voted\n" <>
-        "💡 Vote for the bot on [top.gg](#{TetoBot.Constants.vote_url()}) to get **10 credits** immediately!\n\n"
+        "💡 Vote for the bot on [top.gg](#{TetoBot.Constants.vote_url()}) " <>
+        "to get **#{get_vote_credit_bonus()} credits** immediately!\n\n"
     end
   end
 
@@ -183,5 +183,10 @@ defmodule TetoBot.Interactions.Teto do
       interaction,
       "Something went wrong while retrieving your message status. Please try again later."
     )
+  end
+
+  defp get_vote_credit_bonus do
+    user_config = RateLimiting.get_user_config()
+    user_config.vote_credit_bonus
   end
 end
