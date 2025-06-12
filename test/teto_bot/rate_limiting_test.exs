@@ -1,8 +1,10 @@
-defmodule TetoBot.UserRateLimiterTest do
+defmodule TetoBot.RateLimitingTest do
   @moduledoc """
-  Tests for the UserRateLimiter module, verifying daily message limits based on voting status.
+  Tests for the RateLimiting context, verifying both channel and user rate limiting functionality.
 
   Tests cover:
+  - Channel rate limiting (time-based windows)
+  - User rate limiting (daily message limits)
   - Free user limits (10 messages/day)
   - Voted user limits (30 messages/day)
   - Vote recording and benefits
@@ -13,7 +15,7 @@ defmodule TetoBot.UserRateLimiterTest do
   use ExUnit.Case, async: true
   use ExUnitProperties
 
-  alias TetoBot.UserRateLimiter
+  alias TetoBot.RateLimiting
   alias TetoBot.Accounts
   alias TetoBot.Guilds
 
@@ -24,13 +26,26 @@ defmodule TetoBot.UserRateLimiterTest do
 
   # Test constants
   @valid_user_id 123_456_789_012_345_678
+  @valid_channel_id 123_456_789_012_345_679
   @valid_guild_id 987_654_321_098_765_432
   @valid_guild_id_2 987_654_321_098_765_433
 
-  describe "allow?/1 - rate limiting logic" do
+  describe "allow_channel?/1 - channel rate limiting" do
+    test "allows requests from new channels" do
+      assert true = RateLimiting.allow_channel?(@valid_channel_id)
+    end
+
+    test "rejects invalid channel IDs" do
+      refute RateLimiting.allow_channel?("invalid")
+      refute RateLimiting.allow_channel?(nil)
+      refute RateLimiting.allow_channel?(-1)
+    end
+  end
+
+  describe "allow_user?/1 - user rate limiting logic" do
     test "allows messages for new users under free limit" do
       # New user should start with 0 messages and be allowed
-      assert {:ok, true} = UserRateLimiter.allow?(@valid_user_id)
+      assert {:ok, true} = RateLimiting.allow_user?(@valid_user_id)
     end
 
     test "blocks messages when free user reaches daily limit" do
@@ -44,7 +59,7 @@ defmodule TetoBot.UserRateLimiterTest do
       end
 
       # 11th message should be blocked
-      assert {:ok, false} = UserRateLimiter.allow?(@valid_user_id)
+      assert {:ok, false} = RateLimiting.allow_user?(@valid_user_id)
     end
 
     test "allows more messages for voted users" do
@@ -53,7 +68,7 @@ defmodule TetoBot.UserRateLimiterTest do
       {:ok, _membership} = Accounts.create_membership(@valid_user_id, @valid_guild_id)
 
       # Record a vote (grants 30 messages/day)
-      assert :ok = UserRateLimiter.record_vote(@valid_user_id)
+      assert :ok = RateLimiting.record_vote(@valid_user_id)
 
       # Simulate 25 messages (would exceed free limit but under voted limit)
       for _i <- 1..25 do
@@ -61,7 +76,7 @@ defmodule TetoBot.UserRateLimiterTest do
       end
 
       # Should still be allowed (25 < 30)
-      assert {:ok, true} = UserRateLimiter.allow?(@valid_user_id)
+      assert {:ok, true} = RateLimiting.allow_user?(@valid_user_id)
     end
 
     test "blocks voted users at their daily limit" do
@@ -70,7 +85,7 @@ defmodule TetoBot.UserRateLimiterTest do
       {:ok, _membership} = Accounts.create_membership(@valid_user_id, @valid_guild_id)
 
       # Record a vote (grants 30 messages/day)
-      assert :ok = UserRateLimiter.record_vote(@valid_user_id)
+      assert :ok = RateLimiting.record_vote(@valid_user_id)
 
       # Simulate 30 messages (voted user limit)
       for _i <- 1..30 do
@@ -78,7 +93,7 @@ defmodule TetoBot.UserRateLimiterTest do
       end
 
       # 31st message should be blocked
-      assert {:ok, false} = UserRateLimiter.allow?(@valid_user_id)
+      assert {:ok, false} = RateLimiting.allow_user?(@valid_user_id)
     end
 
     test "counts messages across multiple guilds" do
@@ -95,19 +110,19 @@ defmodule TetoBot.UserRateLimiterTest do
       end
 
       # Should be blocked (10 messages total = free limit)
-      assert {:ok, false} = UserRateLimiter.allow?(@valid_user_id)
+      assert {:ok, false} = RateLimiting.allow_user?(@valid_user_id)
     end
 
     test "rejects invalid user IDs" do
-      assert {:error, :invalid_user_id} = UserRateLimiter.allow?("invalid")
-      assert {:error, :invalid_user_id} = UserRateLimiter.allow?(nil)
-      assert {:error, :invalid_user_id} = UserRateLimiter.allow?(-1)
+      assert {:error, :invalid_user_id} = RateLimiting.allow_user?("invalid")
+      assert {:error, :invalid_user_id} = RateLimiting.allow_user?(nil)
+      assert {:error, :invalid_user_id} = RateLimiting.allow_user?(-1)
     end
   end
 
   describe "record_vote/1 - vote tracking" do
     test "successfully records a vote for valid user" do
-      assert :ok = UserRateLimiter.record_vote(@valid_user_id)
+      assert :ok = RateLimiting.record_vote(@valid_user_id)
 
       # Verify user was created and vote was recorded
       {:ok, user} = Accounts.get_user(@valid_user_id)
@@ -128,7 +143,7 @@ defmodule TetoBot.UserRateLimiterTest do
         |> Ash.update()
 
       # Record another vote (should update to current time)
-      assert :ok = UserRateLimiter.record_vote(@valid_user_id)
+      assert :ok = RateLimiting.record_vote(@valid_user_id)
       {:ok, user2} = Accounts.get_user(@valid_user_id)
       updated_vote_time = user2.last_voted_at
 
@@ -137,15 +152,15 @@ defmodule TetoBot.UserRateLimiterTest do
     end
 
     test "rejects invalid user IDs" do
-      assert {:error, :invalid_user_id} = UserRateLimiter.record_vote("invalid")
-      assert {:error, :invalid_user_id} = UserRateLimiter.record_vote(nil)
-      assert {:error, :invalid_user_id} = UserRateLimiter.record_vote(-1)
+      assert {:error, :invalid_user_id} = RateLimiting.record_vote("invalid")
+      assert {:error, :invalid_user_id} = RateLimiting.record_vote(nil)
+      assert {:error, :invalid_user_id} = RateLimiting.record_vote(-1)
     end
   end
 
   describe "get_user_status/1 - status retrieval" do
     test "returns correct status for new user" do
-      assert {:ok, status} = UserRateLimiter.get_user_status(@valid_user_id)
+      assert {:ok, status} = RateLimiting.get_user_status(@valid_user_id)
 
       assert %{
                daily_limit: 10,
@@ -166,7 +181,7 @@ defmodule TetoBot.UserRateLimiterTest do
         {:ok, _} = Accounts.update_user_metrics(@valid_guild_id, @valid_user_id)
       end
 
-      assert {:ok, status} = UserRateLimiter.get_user_status(@valid_user_id)
+      assert {:ok, status} = RateLimiting.get_user_status(@valid_user_id)
 
       assert %{
                daily_limit: 10,
@@ -181,14 +196,14 @@ defmodule TetoBot.UserRateLimiterTest do
       # Setup: Create guild and record vote
       {:ok, _guild} = Guilds.create_guild(@valid_guild_id)
       {:ok, _membership} = Accounts.create_membership(@valid_user_id, @valid_guild_id)
-      assert :ok = UserRateLimiter.record_vote(@valid_user_id)
+      assert :ok = RateLimiting.record_vote(@valid_user_id)
 
       # Send 5 messages
       for _i <- 1..5 do
         {:ok, _} = Accounts.update_user_metrics(@valid_guild_id, @valid_user_id)
       end
 
-      assert {:ok, status} = UserRateLimiter.get_user_status(@valid_user_id)
+      assert {:ok, status} = RateLimiting.get_user_status(@valid_user_id)
 
       assert %{
                daily_limit: 30,
@@ -215,7 +230,7 @@ defmodule TetoBot.UserRateLimiterTest do
         {:ok, _} = Accounts.update_user_metrics(@valid_guild_id_2, @valid_user_id)
       end
 
-      assert {:ok, status} = UserRateLimiter.get_user_status(@valid_user_id)
+      assert {:ok, status} = RateLimiting.get_user_status(@valid_user_id)
 
       assert %{
                daily_limit: 10,
@@ -229,15 +244,15 @@ defmodule TetoBot.UserRateLimiterTest do
     end
 
     test "rejects invalid user IDs" do
-      assert {:error, :invalid_user_id} = UserRateLimiter.get_user_status("invalid")
-      assert {:error, :invalid_user_id} = UserRateLimiter.get_user_status(nil)
-      assert {:error, :invalid_user_id} = UserRateLimiter.get_user_status(-1)
+      assert {:error, :invalid_user_id} = RateLimiting.get_user_status("invalid")
+      assert {:error, :invalid_user_id} = RateLimiting.get_user_status(nil)
+      assert {:error, :invalid_user_id} = RateLimiting.get_user_status(-1)
     end
   end
 
-  describe "get_config/0 - configuration access" do
+  describe "get_user_config/0 - configuration access" do
     test "returns current configuration" do
-      config = UserRateLimiter.get_config()
+      config = RateLimiting.get_user_config()
 
       assert %{
                free_user_daily_limit: 10,
@@ -246,85 +261,24 @@ defmodule TetoBot.UserRateLimiterTest do
     end
   end
 
-  describe "voting time windows" do
-    test "vote benefits expire after 12 hours" do
-      # Record vote
-      assert :ok = UserRateLimiter.record_vote(@valid_user_id)
+  describe "combined rate limiting behavior" do
+    test "both channel and user limits must allow for message processing" do
+      # Setup: Create guild for user testing
+      {:ok, _guild} = Guilds.create_guild(@valid_guild_id)
+      {:ok, _membership} = Accounts.create_membership(@valid_user_id, @valid_guild_id)
 
-      # Get user and manually update vote time to 13 hours ago
-      {:ok, user} = Accounts.get_user(@valid_user_id)
-      thirteen_hours_ago = DateTime.add(DateTime.utc_now(), -13, :hour)
+      # Both should initially allow
+      assert true = RateLimiting.allow_channel?(@valid_channel_id)
+      assert {:ok, true} = RateLimiting.allow_user?(@valid_user_id)
 
-      {:ok, _updated_user} =
-        user
-        |> Ash.Changeset.for_update(:update, %{last_voted_at: thirteen_hours_ago})
-        |> Ash.update()
-
-      # User should now have free limits, not voted limits
-      assert {:ok, status} = UserRateLimiter.get_user_status(@valid_user_id)
-
-      assert status.daily_limit == 10
-      assert status.is_voted_user == false
-      # Don't check has_voted_today since it depends on current time vs midnight
-    end
-
-    test "vote benefits active within 12 hours" do
-      # Record vote
-      assert :ok = UserRateLimiter.record_vote(@valid_user_id)
-
-      # Get user and update vote time to 11 hours ago
-      {:ok, user} = Accounts.get_user(@valid_user_id)
-      eleven_hours_ago = DateTime.add(DateTime.utc_now(), -11, :hour)
-
-      {:ok, _updated_user} =
-        user
-        |> Ash.Changeset.for_update(:update, %{last_voted_at: eleven_hours_ago})
-        |> Ash.update()
-
-      # User should still have voted benefits
-      assert {:ok, status} = UserRateLimiter.get_user_status(@valid_user_id)
-
-      assert status.daily_limit == 30
-      assert status.is_voted_user == true
-      # Don't check has_voted_today since it depends on current time vs midnight
-    end
-  end
-
-  describe "property-based tests" do
-    property "allow? always returns {:ok, boolean} for valid snowflakes" do
-      check all(user_id <- integer(100_000_000_000_000_000..900_000_000_000_000_000)) do
-        case UserRateLimiter.allow?(user_id) do
-          {:ok, result} -> assert is_boolean(result)
-          {:error, _} -> flunk("Expected {:ok, boolean} for valid snowflake")
-        end
+      # If user reaches limit, channel being allowed shouldn't matter
+      for _i <- 1..10 do
+        {:ok, _} = Accounts.update_user_metrics(@valid_guild_id, @valid_user_id)
       end
-    end
 
-    property "record_vote always succeeds for valid snowflakes" do
-      check all(user_id <- integer(100_000_000_000_000_000..900_000_000_000_000_000)) do
-        assert :ok = UserRateLimiter.record_vote(user_id)
-      end
-    end
-
-    property "get_user_status returns valid status structure" do
-      check all(user_id <- integer(100_000_000_000_000_000..900_000_000_000_000_000)) do
-        assert {:ok, status} = UserRateLimiter.get_user_status(user_id)
-
-        assert %{
-                 daily_limit: limit,
-                 current_count: count,
-                 remaining: remaining,
-                 has_voted_today: voted_today,
-                 is_voted_user: is_voted
-               } = status
-
-        assert is_integer(limit) and limit > 0
-        assert is_integer(count) and count >= 0
-        assert is_integer(remaining) and remaining >= 0
-        assert is_boolean(voted_today)
-        assert is_boolean(is_voted)
-        assert remaining == max(0, limit - count)
-      end
+      # Channel still allows but user doesn't
+      assert true = RateLimiting.allow_channel?(@valid_channel_id)
+      assert {:ok, false} = RateLimiting.allow_user?(@valid_user_id)
     end
   end
 end

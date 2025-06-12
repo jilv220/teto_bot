@@ -7,6 +7,8 @@ alwaysApply: false
   Write the code as if the guy who ends up maintaining your code will be a violent psychopath who knows where you live.
   
   You are an expert in Elixir, nostrum, PostgreSQL, discord api, credo and ai training.
+
+  run `source .env` in the case of missing env variable
   
   Code Style and Structure
   - Write concise, idiomatic Elixir code with accurate examples.

@@ -126,12 +126,13 @@ defmodule TetoBot.Accounts.UserTest do
     test "has_voted_today calculation - vote today" do
       {:ok, user} = Accounts.create_user(@valid_user_id)
 
-      # Vote 2 hours ago (today)
-      two_hours_ago = DateTime.add(DateTime.utc_now(), -2, :hour)
+      # Vote earlier today (ensure it's definitely today)
+      today = Date.utc_today()
+      vote_today = DateTime.new!(today, ~T[12:00:00], "Etc/UTC")
 
       {:ok, updated_user} =
         user
-        |> Ash.Changeset.for_update(:update, %{last_voted_at: two_hours_ago})
+        |> Ash.Changeset.for_update(:update, %{last_voted_at: vote_today})
         |> Ash.update()
 
       {:ok, loaded_user} = Ash.load(updated_user, :has_voted_today)
@@ -209,8 +210,9 @@ defmodule TetoBot.Accounts.UserTest do
     test "loads all vote-related calculations together" do
       {:ok, user} = Accounts.create_user(@valid_user_id)
 
-      # Record a recent vote
-      recent_vote = DateTime.add(DateTime.utc_now(), -1, :hour)
+      # Record a recent vote (earlier today for has_voted_today, within 12h for is_voted_user)
+      today = Date.utc_today()
+      recent_vote = DateTime.new!(today, ~T[12:00:00], "Etc/UTC")
 
       {:ok, updated_user} =
         user
@@ -236,9 +238,10 @@ defmodule TetoBot.Accounts.UserTest do
         {:ok, _} = Accounts.update_user_metrics(@valid_guild_id, @valid_user_id)
       end
 
-      # Record vote
+      # Record vote (earlier today for has_voted_today, within 12h for is_voted_user)
       {:ok, user} = Accounts.get_user(@valid_user_id)
-      recent_vote = DateTime.add(DateTime.utc_now(), -30, :minute)
+      today = Date.utc_today()
+      recent_vote = DateTime.new!(today, ~T[14:00:00], "Etc/UTC")
 
       {:ok, updated_user} =
         user

@@ -27,7 +27,7 @@ defmodule TetoBot.Application do
       {Redix, redis_options},
       TetoBot.Repo,
       {Oban, Application.fetch_env!(:teto_bot, Oban)},
-      {TetoBot.RateLimiter, [clean_period: :timer.minutes(1)]},
+      {TetoBot.RateLimiting.ChannelLimiter, [clean_period: :timer.minutes(1)]},
       TetoBot.Guilds.Cache,
       TetoBot.Channels.Cache,
       TetoBot.Tokenizer,

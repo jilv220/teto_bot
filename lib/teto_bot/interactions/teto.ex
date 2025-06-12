@@ -33,7 +33,7 @@ defmodule TetoBot.Interactions.Teto do
 
   alias TetoBot.Format
   alias TetoBot.Interactions.{Permissions, Responses}
-  alias TetoBot.UserRateLimiter
+  alias TetoBot.RateLimiting
 
   @spec handle_teto(Struct.Interaction.t()) :: :ok | Nostrum.Api.error()
   @doc """
@@ -52,7 +52,7 @@ defmodule TetoBot.Interactions.Teto do
         } = interaction
       ) do
     Permissions.with_whitelisted_channel(interaction, channel_id, fn ->
-      case {Accounts.get_metrics(guild_id, user_id), UserRateLimiter.get_user_status(user_id)} do
+      case {Accounts.get_metrics(guild_id, user_id), RateLimiting.get_user_status(user_id)} do
         {{:ok, metrics}, {:ok, status}} ->
           response = build_combined_response(metrics, status, guild_id, user_id)
           Responses.success(interaction, response, ephemeral: true)

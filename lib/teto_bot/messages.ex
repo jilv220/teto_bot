@@ -16,8 +16,7 @@ defmodule TetoBot.Messages do
   alias TetoBot.Accounts
   alias TetoBot.LLM
   alias TetoBot.Messages
-  alias TetoBot.RateLimiter
-  alias TetoBot.UserRateLimiter
+  alias TetoBot.RateLimiting
 
   @spec handle_msg(Nostrum.Struct.Message.t()) :: :ok
   @doc """
@@ -84,9 +83,9 @@ defmodule TetoBot.Messages do
          %Struct.Message{channel_id: channel_id, author: %Struct.User{id: user_id}} = msg
        ) do
     # Check both channel and user rate limits
-    channel_allowed = RateLimiter.allow?(channel_id)
+    channel_allowed = RateLimiting.allow_channel?(channel_id)
 
-    case UserRateLimiter.allow?(user_id) do
+    case RateLimiting.allow_user?(user_id) do
       {:ok, true} when channel_allowed ->
         generate_and_send_response!(msg)
 
@@ -183,7 +182,7 @@ defmodule TetoBot.Messages do
   @doc false
   # Sends a user-specific rate limit warning.
   defp send_user_rate_limit_warning(channel_id, user_id) do
-    case UserRateLimiter.get_user_status(user_id) do
+    case RateLimiting.get_user_status(user_id) do
       {:ok, status} ->
         message = build_rate_limit_message(status)
         Api.Message.create(channel_id, content: message)

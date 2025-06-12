@@ -22,7 +22,7 @@ defmodule TetoBot.Web.Router do
         %{"user" => user_id, "type" => "upvote", "bot" => bot_id} ->
           Logger.info("User #{user_id} voted for bot #{bot_id}!")
 
-          case TetoBot.UserRateLimiter.record_vote(String.to_integer(user_id)) do
+          case TetoBot.RateLimiting.record_vote(String.to_integer(user_id)) do
             :ok ->
               Logger.info("Successfully recorded vote for user #{user_id}")
 
