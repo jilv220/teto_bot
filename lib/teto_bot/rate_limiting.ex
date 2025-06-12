@@ -9,7 +9,11 @@ defmodule TetoBot.RateLimiting do
   Controls frequency of requests per channel using time-based windows.
 
   ## User Rate Limiting
-  Controls daily message limits based on user voting status and subscription tiers.
+  Controls message access using a credit-based charging system.
+  - All users start with 10 message credits
+  - Users get 10 credits recharged daily at midnight UTC
+  - Voting adds 10 credits immediately
+  - Credits accumulate over time (no daily reset)
 
   ## Configuration
 
@@ -18,9 +22,9 @@ defmodule TetoBot.RateLimiting do
         rate_limit_window: 60,        # seconds
         rate_limit_max_requests: 5,   # max requests per window
 
-        # User daily limits
-        free_user_daily_limit: 10,
-        voted_user_daily_limit: 30
+        # User credit system
+        daily_credit_recharge: 10,    # credits added each day
+        vote_credit_bonus: 10         # credits added per vote
 
   ## Usage
 
@@ -46,22 +50,22 @@ defmodule TetoBot.RateLimiting do
   # Public API - User Rate Limiting
 
   @doc """
-  Checks if a user is allowed to send a message.
+  Checks if a user has message credits and deducts one if available.
   """
   defdelegate allow_user?(user_id), to: UserLimiter, as: :allow?
 
   @doc """
-  Records when a user votes for the bot.
+  Records when a user votes for the bot and adds credit bonus.
   """
   defdelegate record_vote(user_id), to: UserLimiter
 
   @doc """
-  Gets a user's current rate limit status.
+  Gets a user's current message credits and voting status.
   """
   defdelegate get_user_status(user_id), to: UserLimiter
 
   @doc """
-  Returns the current configuration for user rate limiting.
+  Returns the current configuration for the credit system.
   """
   defdelegate get_user_config(), to: UserLimiter, as: :get_config
 end

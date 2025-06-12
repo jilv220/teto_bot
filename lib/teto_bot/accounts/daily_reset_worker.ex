@@ -1,10 +1,11 @@
 defmodule TetoBot.Accounts.DailyResetWorker do
   @moduledoc """
-  Background job that resets daily user metrics and feed cooldowns
+  Background job that recharges user message credits and resets daily metrics
   at midnight UTC each day.
 
   This worker is responsible for:
-  - Resetting daily_message_count to 0 for all user_guilds
+  - Adding 10 message credits to all users (charging system)
+  - Resetting daily_message_count to 0 for all user_guilds (usage tracking)
   - Clearing feed_cooldown_until timestamps for all user_guilds
 
   Scheduled via Oban cron to run at midnight UTC daily.
@@ -14,19 +15,25 @@ defmodule TetoBot.Accounts.DailyResetWorker do
   require Logger
   require Ash.Query
 
-  alias TetoBot.Accounts.UserGuild
+  alias TetoBot.Accounts.{User, UserGuild}
 
   @impl Oban.Worker
   def perform(_job) do
-    Logger.info("DailyResetWorker: Starting daily message count reset")
+    Logger.info("DailyResetWorker: Starting daily credit recharge and metric reset")
 
-    case reset_all_daily_counts() do
-      {:ok, reset_count} ->
-        Logger.info("DailyResetWorker: Successfully reset #{reset_count} user daily counts")
-        :ok
+    with {:ok, credit_count} <- recharge_all_credits(),
+         {:ok, reset_count} <- reset_all_daily_metrics() do
+      Logger.info(
+        "DailyResetWorker: Successfully recharged #{credit_count} users and reset #{reset_count} daily metrics"
+      )
 
+      :ok
+    else
       {:error, reason} ->
-        Logger.error("DailyResetWorker: Failed to reset daily counts. Reason: #{inspect(reason)}")
+        Logger.error(
+          "DailyResetWorker: Failed to complete daily reset. Reason: #{inspect(reason)}"
+        )
+
         {:error, reason}
     end
   end
@@ -40,7 +47,42 @@ defmodule TetoBot.Accounts.DailyResetWorker do
     |> Oban.insert()
   end
 
-  defp reset_all_daily_counts do
+  defp recharge_all_credits do
+    Logger.info("DailyResetWorker: Recharging message credits for all users")
+
+    case User
+         |> Ash.Query.for_read(:read)
+         |> Ash.read() do
+      {:ok, users} ->
+        credit_count =
+          Enum.reduce(users, 0, fn user, count ->
+            new_credits = user.message_credits + 10
+
+            case user
+                 |> Ash.Changeset.for_update(:update, %{message_credits: new_credits})
+                 |> Ash.update() do
+              {:ok, _} ->
+                count + 1
+
+              {:error, reason} ->
+                Logger.error(
+                  "Failed to recharge credits for user #{user.user_id}: #{inspect(reason)}"
+                )
+
+                count
+            end
+          end)
+
+        {:ok, credit_count}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp reset_all_daily_metrics do
+    Logger.info("DailyResetWorker: Resetting daily message counts and feed cooldowns")
+
     # Reset daily_message_count to 0 and last_feed to nil for all users where needed
     case UserGuild
          |> Ash.Query.for_read(:read)

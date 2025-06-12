@@ -71,9 +71,7 @@ defmodule TetoBot.Interactions.Teto do
   defp build_combined_response(
          {intimacy, daily_message_count} = _metrics,
          %{
-           daily_limit: limit,
-           current_count: count,
-           remaining: remaining,
+           message_credits: credits,
            is_voted_user: is_voted,
            has_voted_today: voted_today
          } = _status,
@@ -81,9 +79,9 @@ defmodule TetoBot.Interactions.Teto do
          user_id
        ) do
     intimacy_section = build_intimacy_section(intimacy, daily_message_count, guild_id, user_id)
-    message_status_section = build_message_status_section(limit, count, remaining)
-    voting_status_section = build_voting_status_section(is_voted, voted_today, limit)
-    reset_info = "🕛 Daily limits reset at **midnight UTC (12am)** each day."
+    message_status_section = build_message_status_section(credits)
+    voting_status_section = build_voting_status_section(is_voted, voted_today)
+    reset_info = "🕛 Daily credit recharge happens at **midnight UTC (12am)** each day."
 
     intimacy_section <> message_status_section <> voting_status_section <> reset_info
   end
@@ -108,21 +106,21 @@ defmodule TetoBot.Interactions.Teto do
 
   @doc false
   # Builds the daily message status section.
-  defp build_message_status_section(limit, count, remaining) do
-    "📊 **Your Daily Message Status**\n\n" <>
-      "• Messages used today: **#{count}/#{limit}**\n" <>
-      "• Messages remaining: **#{remaining}**\n\n"
+  defp build_message_status_section(credits) do
+    "💳 **Your Message Credits**\n\n" <>
+      "• Credits available: **#{credits}**\n" <>
+      "• Each message costs 1 credit\n\n"
   end
 
   @doc false
   # Builds the voting status section.
-  defp build_voting_status_section(is_voted, _voted_today, limit) do
+  defp build_voting_status_section(is_voted, _voted_today) do
     if is_voted do
       "✅ **Voting Status**: Active (voted since last reset)\n" <>
-        "🎉 You have **#{limit}** messages per day thanks to voting!\n\n"
+        "🎉 Thanks for voting! Vote again to get **10 more credits** immediately!\n\n"
     else
       "❌ **Voting Status**: Not voted\n" <>
-        "💡 Vote for the bot on [top.gg](#{TetoBot.Constants.vote_url()}) to get **30** messages per day instead of **10**!\n\n"
+        "💡 Vote for the bot on [top.gg](#{TetoBot.Constants.vote_url()}) to get **10 credits** immediately!\n\n"
     end
   end
 

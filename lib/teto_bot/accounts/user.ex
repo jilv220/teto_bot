@@ -65,6 +65,9 @@ defmodule TetoBot.Accounts.User do
     # Vote tracking for rate limiting
     attribute :last_voted_at, :utc_datetime, public?: true
 
+    # Message credits for charging system
+    attribute :message_credits, :integer, default: 10, allow_nil?: false, public?: true
+
     # Default Ecto timestamps
     create_timestamp :inserted_at
     update_timestamp :updated_at

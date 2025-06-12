@@ -190,20 +190,22 @@ defmodule TetoBot.Messages do
       {:error, _reason} ->
         Api.Message.create(channel_id,
           content:
-            "You've reached your daily message limit! Vote for the bot to get more messages per day.\n" <>
-              "#{TetoBot.Constants.vote_url()})"
+            "You've run out of message credits! Vote for the bot to get more credits.\n" <>
+              "#{TetoBot.Constants.vote_url()}"
         )
     end
   end
 
-  defp build_rate_limit_message(%{is_voted_user: true, daily_limit: limit, current_count: count}) do
-    "You've reached your daily limit of #{limit} messages (#{count}/#{limit})! " <>
-      "Thanks for voting! Your limit will reset at midnight UTC."
+  defp build_rate_limit_message(%{message_credits: credits, is_voted_user: true}) do
+    "You've run out of message credits! (#{credits} remaining) " <>
+      "Thanks for voting! You'll get 10 more credits at midnight UTC, " <>
+      "or vote again on top.gg for another 10 credits immediately."
   end
 
-  defp build_rate_limit_message(%{daily_limit: limit, current_count: count}) do
-    "You've reached your daily limit of #{limit} messages (#{count}/#{limit})! " <>
-      "Vote for the bot on top.gg to get 30 messages per day instead of 10. " <>
-      "Your limit will reset at midnight UTC."
+  defp build_rate_limit_message(%{message_credits: credits}) do
+    "You've run out of message credits! (#{credits} remaining) " <>
+      "Vote for the bot on top.gg to get 10 credits immediately, " <>
+      "plus you'll get 10 more credits every day at midnight UTC. " <>
+      "#{TetoBot.Constants.vote_url()}"
   end
 end

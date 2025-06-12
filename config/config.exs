@@ -98,8 +98,8 @@ config :teto_bot, TetoBot.Accounts.Decay,
 config :teto_bot, TetoBot.RateLimiting,
   rate_limit_window: 60,
   rate_limit_max_requests: 20,
-  free_user_daily_limit: 10,
-  voted_user_daily_limit: 30
+  daily_credit_recharge: 10,
+  vote_credit_bonus: 10
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
