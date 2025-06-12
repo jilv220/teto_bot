@@ -83,7 +83,7 @@ defmodule TetoBot.Interactions.Teto do
     intimacy_section = build_intimacy_section(intimacy, daily_message_count, guild_id, user_id)
     message_status_section = build_message_status_section(limit, count, remaining)
     voting_status_section = build_voting_status_section(is_voted, voted_today, limit)
-    reset_info = "🕛 Daily limits reset at **midnight UTC** each day."
+    reset_info = "🕛 Daily limits reset at **midnight UTC (12am)** each day."
 
     intimacy_section <> message_status_section <> voting_status_section <> reset_info
   end
@@ -116,15 +116,10 @@ defmodule TetoBot.Interactions.Teto do
 
   @doc false
   # Builds the voting status section.
-  defp build_voting_status_section(is_voted, voted_today, limit) do
+  defp build_voting_status_section(is_voted, _voted_today, limit) do
     if is_voted do
-      if voted_today do
-        "✅ **Voting Status**: Active (voted today)\n" <>
-          "🎉 You have **#{limit}** messages per day thanks to voting!\n\n"
-      else
-        "✅ **Voting Status**: Active (voted within 12 hours)\n" <>
-          "🎉 You have **#{limit}** messages per day thanks to voting!\n\n"
-      end
+      "✅ **Voting Status**: Active (voted since last reset)\n" <>
+        "🎉 You have **#{limit}** messages per day thanks to voting!\n\n"
     else
       "❌ **Voting Status**: Not voted\n" <>
         "💡 Vote for the bot on [top.gg](#{TetoBot.Constants.vote_url()}) to get **30** messages per day instead of **10**!\n\n"

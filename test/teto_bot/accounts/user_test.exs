@@ -86,30 +86,32 @@ defmodule TetoBot.Accounts.UserTest do
   end
 
   describe "calculated fields" do
-    test "is_voted_user calculation - recent vote" do
+    test "is_voted_user calculation - vote today" do
       {:ok, user} = Accounts.create_user(@valid_user_id)
 
-      # Vote 2 hours ago (within 12 hour window)
-      two_hours_ago = DateTime.add(DateTime.utc_now(), -2, :hour)
+      # Vote earlier today (ensure it's definitely today)
+      today = Date.utc_today()
+      vote_today = DateTime.new!(today, ~T[12:00:00], "Etc/UTC")
 
       {:ok, updated_user} =
         user
-        |> Ash.Changeset.for_update(:update, %{last_voted_at: two_hours_ago})
+        |> Ash.Changeset.for_update(:update, %{last_voted_at: vote_today})
         |> Ash.update()
 
       {:ok, loaded_user} = Ash.load(updated_user, :is_voted_user)
       assert loaded_user.is_voted_user == true
     end
 
-    test "is_voted_user calculation - old vote" do
+    test "is_voted_user calculation - vote yesterday" do
       {:ok, user} = Accounts.create_user(@valid_user_id)
 
-      # Vote 14 hours ago (outside 12 hour window)
-      fourteen_hours_ago = DateTime.add(DateTime.utc_now(), -14, :hour)
+      # Vote yesterday (should be false now since it resets at midnight)
+      yesterday = Date.add(Date.utc_today(), -1)
+      vote_yesterday = DateTime.new!(yesterday, ~T[23:00:00], "Etc/UTC")
 
       {:ok, updated_user} =
         user
-        |> Ash.Changeset.for_update(:update, %{last_voted_at: fourteen_hours_ago})
+        |> Ash.Changeset.for_update(:update, %{last_voted_at: vote_yesterday})
         |> Ash.update()
 
       {:ok, loaded_user} = Ash.load(updated_user, :is_voted_user)
@@ -142,12 +144,13 @@ defmodule TetoBot.Accounts.UserTest do
     test "has_voted_today calculation - vote yesterday" do
       {:ok, user} = Accounts.create_user(@valid_user_id)
 
-      # Vote 25 hours ago (yesterday)
-      twenty_five_hours_ago = DateTime.add(DateTime.utc_now(), -25, :hour)
+      # Vote yesterday (should be false now since it resets at midnight)
+      yesterday = Date.add(Date.utc_today(), -1)
+      vote_yesterday = DateTime.new!(yesterday, ~T[23:00:00], "Etc/UTC")
 
       {:ok, updated_user} =
         user
-        |> Ash.Changeset.for_update(:update, %{last_voted_at: twenty_five_hours_ago})
+        |> Ash.Changeset.for_update(:update, %{last_voted_at: vote_yesterday})
         |> Ash.update()
 
       {:ok, loaded_user} = Ash.load(updated_user, :has_voted_today)
@@ -210,7 +213,7 @@ defmodule TetoBot.Accounts.UserTest do
     test "loads all vote-related calculations together" do
       {:ok, user} = Accounts.create_user(@valid_user_id)
 
-      # Record a recent vote (earlier today for has_voted_today, within 12h for is_voted_user)
+      # Record a recent vote (earlier today - both calculations should be true)
       today = Date.utc_today()
       recent_vote = DateTime.new!(today, ~T[12:00:00], "Etc/UTC")
 
@@ -238,7 +241,7 @@ defmodule TetoBot.Accounts.UserTest do
         {:ok, _} = Accounts.update_user_metrics(@valid_guild_id, @valid_user_id)
       end
 
-      # Record vote (earlier today for has_voted_today, within 12h for is_voted_user)
+      # Record vote (earlier today - both calculations should be true)
       {:ok, user} = Accounts.get_user(@valid_user_id)
       today = Date.utc_today()
       recent_vote = DateTime.new!(today, ~T[14:00:00], "Etc/UTC")
@@ -268,20 +271,20 @@ defmodule TetoBot.Accounts.UserTest do
       assert loaded_user.has_voted_today == false
     end
 
-    test "handles vote exactly at 12 hour boundary" do
+    test "handles vote exactly at midnight boundary" do
       {:ok, user} = Accounts.create_user(@valid_user_id)
 
-      # Vote exactly 12 hours ago
-      exactly_twelve_hours = DateTime.add(DateTime.utc_now(), -12, :hour)
+      # Vote exactly at midnight today (should be true)
+      today_start = DateTime.new!(Date.utc_today(), ~T[00:00:00], "Etc/UTC")
 
       {:ok, updated_user} =
         user
-        |> Ash.Changeset.for_update(:update, %{last_voted_at: exactly_twelve_hours})
+        |> Ash.Changeset.for_update(:update, %{last_voted_at: today_start})
         |> Ash.update()
 
       {:ok, loaded_user} = Ash.load(updated_user, :is_voted_user)
-      # Should be false since it's not > 12 hours ago, it's == 12 hours ago
-      assert loaded_user.is_voted_user == false
+      # Should be true since it's exactly at the start of today
+      assert loaded_user.is_voted_user == true
     end
 
     test "handles vote at midnight boundary for daily check" do

@@ -82,14 +82,14 @@ defmodule TetoBot.Accounts.User do
               :boolean,
               expr(
                 not is_nil(last_voted_at) and
-                  last_voted_at > fragment("NOW() - INTERVAL '12 hours'")
+                  last_voted_at >= fragment("date_trunc('day', NOW() AT TIME ZONE 'UTC')")
               )
 
     calculate :has_voted_today,
               :boolean,
               expr(
                 not is_nil(last_voted_at) and
-                  last_voted_at > fragment("date_trunc('day', NOW() AT TIME ZONE 'UTC')")
+                  last_voted_at >= fragment("date_trunc('day', NOW() AT TIME ZONE 'UTC')")
               )
   end
 

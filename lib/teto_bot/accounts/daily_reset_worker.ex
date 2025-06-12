@@ -1,10 +1,11 @@
 defmodule TetoBot.Accounts.DailyResetWorker do
   @moduledoc """
-  An Oban worker responsible for resetting daily message counts for all users
+  Background job that resets daily user metrics and feed cooldowns
   at midnight UTC each day.
 
-  This ensures consistent daily reset timing across all users and prevents
-  race conditions that could occur with per-message daily checks.
+  This worker is responsible for:
+  - Resetting daily_message_count to 0 for all user_guilds
+  - Clearing feed_cooldown_until timestamps for all user_guilds
 
   Scheduled via Oban cron to run at midnight UTC daily.
   """
