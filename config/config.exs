@@ -95,11 +95,11 @@ config :teto_bot, TetoBot.Accounts.Decay,
   decay_amount: 4,
   minimum_intimacy: 5
 
-# User rate limiting configuration
-config :teto_bot, TetoBot.UserRateLimiter,
+config :teto_bot, TetoBot.RateLimiting,
+  rate_limit_window: 60,
+  rate_limit_max_requests: 20,
   free_user_daily_limit: 10,
-  voted_user_daily_limit: 30,
-  vote_benefit_hours: 12
+  voted_user_daily_limit: 30
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
