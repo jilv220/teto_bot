@@ -1,10 +1,10 @@
 defmodule TetoBot.Accounts.DailyResetWorker do
   @moduledoc """
-  Background job that recharges user message credits and resets daily metrics
+  Background job that refills user message credits and resets daily metrics
   at midnight UTC each day.
 
   This worker is responsible for:
-  - Adding 10 message credits to all users (charging system)
+  - Refilling message credits to daily cap for users below the threshold (refill system)
   - Resetting daily_message_count to 0 for all user_guilds (usage tracking)
   - Clearing feed_cooldown_until timestamps for all user_guilds
 
@@ -20,12 +20,12 @@ defmodule TetoBot.Accounts.DailyResetWorker do
 
   @impl Oban.Worker
   def perform(_job) do
-    Logger.info("DailyResetWorker: Starting daily credit recharge and metric reset")
+    Logger.info("DailyResetWorker: Starting daily credit refill and metric reset")
 
     with {:ok, credit_count} <- recharge_all_credits(),
          {:ok, reset_count} <- reset_all_daily_metrics() do
       Logger.info(
-        "DailyResetWorker: Successfully recharged #{credit_count} users and reset #{reset_count} daily metrics"
+        "DailyResetWorker: Successfully refilled #{credit_count} users and reset #{reset_count} daily metrics"
       )
 
       :ok
@@ -49,7 +49,9 @@ defmodule TetoBot.Accounts.DailyResetWorker do
   end
 
   defp recharge_all_credits do
-    Logger.info("DailyResetWorker: Recharging message credits for all users")
+    Logger.info("DailyResetWorker: Refilling message credits for users below the daily cap")
+
+    refill_cap = RateLimiting.get_daily_credit_refill_cap()
 
     case User
          |> Ash.Query.for_read(:read)
@@ -57,20 +59,25 @@ defmodule TetoBot.Accounts.DailyResetWorker do
       {:ok, users} ->
         credit_count =
           Enum.reduce(users, 0, fn user, count ->
-            new_credits = user.message_credits + RateLimiting.get_daily_credit_recharge()
+            current_credits = user.message_credits || 0
 
-            case user
-                 |> Ash.Changeset.for_update(:update, %{message_credits: new_credits})
-                 |> Ash.update() do
-              {:ok, _} ->
-                count + 1
+            if current_credits < refill_cap do
+              case user
+                   |> Ash.Changeset.for_update(:update, %{message_credits: refill_cap})
+                   |> Ash.update() do
+                {:ok, _} ->
+                  count + 1
 
-              {:error, reason} ->
-                Logger.error(
-                  "Failed to recharge credits for user #{user.user_id}: #{inspect(reason)}"
-                )
+                {:error, reason} ->
+                  Logger.error(
+                    "Failed to refill credits for user #{user.user_id}: #{inspect(reason)}"
+                  )
 
-                count
+                  count
+              end
+            else
+              # User already has credits >= refill_cap, no change needed
+              count
             end
           end)
 

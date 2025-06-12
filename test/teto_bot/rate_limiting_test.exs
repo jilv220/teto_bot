@@ -4,11 +4,11 @@ defmodule TetoBot.RateLimitingTest do
 
   Tests cover:
   - Channel rate limiting (time-based windows)
-  - User credit-based charging system
+  - User credit-based refill system
   - Credit deduction per message
-  - Credit accumulation over time
+  - Credit refill to daily cap
   - Vote credit bonuses
-  - Daily credit recharge
+  - Daily credit refill
   - Cross-guild credit sharing
   - Edge cases and error handling
   """
@@ -49,7 +49,7 @@ defmodule TetoBot.RateLimitingTest do
 
   describe "allow_user?/1 - credit-based rate limiting" do
     test "allows messages for new users with default credits", %{config: config} do
-      default_credits = config.daily_credit_recharge
+      default_credits = config.daily_credit_refill_cap
       # New user should start with default credits and be allowed
       assert {:ok, true} = RateLimiting.allow_user?(@valid_user_id)
 
@@ -60,7 +60,7 @@ defmodule TetoBot.RateLimitingTest do
     end
 
     test "deducts one credit per message", %{config: config} do
-      default_credits = config.daily_credit_recharge
+      default_credits = config.daily_credit_refill_cap
       # Allow 3 messages and check credit deduction
       # default_credits -> default_credits - 1
       assert {:ok, true} = RateLimiting.allow_user?(@valid_user_id)
@@ -74,7 +74,7 @@ defmodule TetoBot.RateLimitingTest do
     end
 
     test "blocks messages when user runs out of credits", %{config: config} do
-      default_credits = config.daily_credit_recharge
+      default_credits = config.daily_credit_refill_cap
       # Deplete all credits (default_credits messages should be allowed)
       for i <- 1..default_credits do
         assert {:ok, true} = RateLimiting.allow_user?(@valid_user_id),
@@ -90,7 +90,7 @@ defmodule TetoBot.RateLimitingTest do
     end
 
     test "credits are shared across guilds", %{config: config} do
-      default_credits = config.daily_credit_recharge
+      default_credits = config.daily_credit_refill_cap
       # Credits are user-level, not per-guild
       # Setup guilds for consistency but credits should be shared
       {:ok, _guild1} = Guilds.create_guild(@valid_guild_id)
@@ -161,7 +161,7 @@ defmodule TetoBot.RateLimitingTest do
 
     test "vote credits accumulate with existing credits", %{config: config} do
       vote_bonus = config.vote_credit_bonus
-      default_credits = config.daily_credit_recharge
+      default_credits = config.daily_credit_refill_cap
       # Use some credits first
       for _i <- 1..3 do
         assert {:ok, true} = RateLimiting.allow_user?(@valid_user_id)
@@ -189,7 +189,7 @@ defmodule TetoBot.RateLimitingTest do
 
   describe "get_user_status/1 - status retrieval" do
     test "returns correct status for new user", %{config: config} do
-      default_credits = config.daily_credit_recharge
+      default_credits = config.daily_credit_refill_cap
       assert {:ok, status} = RateLimiting.get_user_status(@valid_user_id)
 
       assert %{
@@ -201,7 +201,7 @@ defmodule TetoBot.RateLimitingTest do
     end
 
     test "returns correct status after using credits", %{config: config} do
-      default_credits = config.daily_credit_recharge
+      default_credits = config.daily_credit_refill_cap
       # Use 3 credits
       for _i <- 1..3 do
         assert {:ok, true} = RateLimiting.allow_user?(@valid_user_id)
@@ -220,7 +220,7 @@ defmodule TetoBot.RateLimitingTest do
     end
 
     test "returns correct status for voted user", %{config: config} do
-      default_credits = config.daily_credit_recharge
+      default_credits = config.daily_credit_refill_cap
       vote_bonus = config.vote_credit_bonus
 
       assert :ok = RateLimiting.record_vote(@valid_user_id)
@@ -253,14 +253,14 @@ defmodule TetoBot.RateLimitingTest do
     test "returns current credit system configuration", %{config: config} do
       returned_config = RateLimiting.get_user_config()
 
-      assert returned_config.daily_credit_recharge == config.daily_credit_recharge
+      assert returned_config.daily_credit_refill_cap == config.daily_credit_refill_cap
       assert returned_config.vote_credit_bonus == config.vote_credit_bonus
     end
   end
 
-  describe "daily credit recharge system" do
+  describe "daily credit refill system" do
     test "users can accumulate large amounts of credits over time", %{config: config} do
-      default_credits = config.daily_credit_recharge
+      default_credits = config.daily_credit_refill_cap
       vote_bonus = config.vote_credit_bonus
 
       # Start with default credits
@@ -292,12 +292,12 @@ defmodule TetoBot.RateLimitingTest do
       assert final_status.message_credits == expected_credits - messages_to_send
     end
 
-    test "credits persist and don't reset daily", %{config: config} do
-      default_credits = config.daily_credit_recharge
+    test "credits persist and refill to cap daily", %{config: config} do
+      default_credits = config.daily_credit_refill_cap
       vote_bonus = config.vote_credit_bonus
 
-      # This test verifies that credits accumulate and don't get reset
-      # (unlike the old daily limit system)
+      # This test verifies that credits refill to cap but don't get reset to zero
+      # (using the refill system instead of accumulation)
 
       # Use 3 credits
       for _i <- 1..3 do
@@ -318,7 +318,7 @@ defmodule TetoBot.RateLimitingTest do
 
   describe "edge cases and boundary conditions" do
     test "user with 0 credits cannot send messages", %{config: config} do
-      default_credits = config.daily_credit_recharge
+      default_credits = config.daily_credit_refill_cap
       # Deplete all credits
       for _i <- 1..default_credits do
         assert {:ok, true} = RateLimiting.allow_user?(@valid_user_id)
@@ -350,7 +350,7 @@ defmodule TetoBot.RateLimitingTest do
     end
 
     test "large credit amounts work correctly", %{config: config} do
-      default_credits = config.daily_credit_recharge
+      default_credits = config.daily_credit_refill_cap
       vote_bonus = config.vote_credit_bonus
 
       # Simulate user with many votes over time
@@ -381,7 +381,7 @@ defmodule TetoBot.RateLimitingTest do
 
   describe "combined rate limiting behavior" do
     test "both channel and user limits must allow for message processing", %{config: config} do
-      default_credits = config.daily_credit_recharge
+      default_credits = config.daily_credit_refill_cap
       # Both should initially allow
       assert true = RateLimiting.allow_channel?(@valid_channel_id)
       assert {:ok, true} = RateLimiting.allow_user?(@valid_user_id)

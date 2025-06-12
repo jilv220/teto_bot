@@ -197,14 +197,14 @@ defmodule TetoBot.Messages do
   end
 
   defp build_rate_limit_message(%{message_credits: _credits, is_voted_user: true}) do
-    "Thanks for voting! You'll get #{RateLimiting.get_daily_credit_recharge()} more credits at midnight UTC, " <>
+    "Thanks for voting! Your credits will refill to #{RateLimiting.get_daily_credit_refill_cap()} at midnight UTC, " <>
       "or vote again on top.gg for another #{RateLimiting.get_vote_credit_bonus()} credits immediately."
   end
 
   defp build_rate_limit_message(%{message_credits: credits}) do
     "You've run out of message credits! (#{credits} remaining) " <>
       "Vote for the bot on top.gg to get #{RateLimiting.get_vote_credit_bonus()} credits immediately, " <>
-      "plus you'll get #{RateLimiting.get_daily_credit_recharge()} more credits every day at midnight UTC.\n" <>
+      "plus your credits will refill to #{RateLimiting.get_daily_credit_refill_cap()} every day at midnight UTC.\n" <>
       "#{TetoBot.Constants.vote_url()}"
   end
 end

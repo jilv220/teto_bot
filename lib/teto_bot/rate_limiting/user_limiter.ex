@@ -1,12 +1,12 @@
 defmodule TetoBot.RateLimiting.UserLimiter do
   @moduledoc """
-  User-specific rate limiter using a message credits charging system.
+  User-specific rate limiter using a message credits refill system.
 
   Features:
-  - All users start with 10 message credits
-  - Users get 10 credits recharged daily at midnight UTC
-  - Voting adds 10 credits immediately
-  - Credits accumulate over time (no daily reset)
+  - All users start with daily credit refill cap amount
+  - Credits refill to daily cap at midnight UTC if below cap
+  - Voting adds vote bonus credits immediately
+  - Credits can accumulate but are capped at daily refill
   - Development environment bypass
 
   ## Configuration
@@ -14,8 +14,8 @@ defmodule TetoBot.RateLimiting.UserLimiter do
   Configure via the RateLimiting context:
 
       config :teto_bot, TetoBot.RateLimiting,
-        daily_credit_recharge: 10,
-        vote_credit_bonus: 10
+        daily_credit_refill_cap: 30,
+        vote_credit_bonus: 30
 
   ## Examples
 
@@ -36,8 +36,8 @@ defmodule TetoBot.RateLimiting.UserLimiter do
 
   # Default configuration
   @defaults [
-    daily_credit_recharge: 30,
-    vote_credit_bonus: 30
+    vote_credit_bonus: 30,
+    daily_credit_refill_cap: 30
   ]
 
   @type status_result ::
@@ -120,16 +120,16 @@ defmodule TetoBot.RateLimiting.UserLimiter do
   end
 
   @spec get_config() :: %{
-          daily_credit_recharge: non_neg_integer(),
-          vote_credit_bonus: non_neg_integer()
+          vote_credit_bonus: non_neg_integer(),
+          daily_credit_refill_cap: non_neg_integer()
         }
   @doc """
   Returns the current configuration for the credit system.
   """
   def get_config do
     %{
-      daily_credit_recharge: Behaviour.get_config(:daily_credit_recharge, @defaults),
-      vote_credit_bonus: Behaviour.get_config(:vote_credit_bonus, @defaults)
+      vote_credit_bonus: Behaviour.get_config(:vote_credit_bonus, @defaults),
+      daily_credit_refill_cap: Behaviour.get_config(:daily_credit_refill_cap, @defaults)
     }
   end
 
