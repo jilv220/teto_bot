@@ -116,11 +116,25 @@ defmodule TetoBot.Messages do
     } = msg
 
     Logger.info("Message received - User: #{username}(#{user_id}) from (Guild: #{guild_id})")
+    Logger.debug("Message content: #{msg.content}")
 
-    msg
-    |> Messages.Attachment.process_attachments()
-    |> build_message_context(guild_id, user_id, channel_id)
-    |> generate_llm_response()
+    llm_response =
+      msg.content
+      |> Messages.Filter.contains_injection?()
+      |> case do
+        true ->
+          msg
+          |> build_message_context(guild_id, user_id, channel_id)
+          |> generate_llm_response(:jailbreak)
+
+        false ->
+          msg
+          |> Messages.Attachment.process_attachments()
+          |> build_message_context(guild_id, user_id, channel_id)
+          |> generate_llm_response(:standard)
+      end
+
+    llm_response
     |> send_discord_response(channel_id, message_id)
     |> update_user_metrics(guild_id, user_id)
 
@@ -141,9 +155,15 @@ defmodule TetoBot.Messages do
 
   @doc false
   # Generates LLM response using the built context
-  defp generate_llm_response({msg, context}) do
+  defp generate_llm_response({msg, context}, :standard) do
     openai = LLM.get_client()
-    response = openai |> LLM.generate_response!(context)
+    response = openai |> LLM.generate_response!(context, :standard)
+    {msg, response}
+  end
+
+  defp generate_llm_response({msg, context}, :jailbreak) do
+    openai = LLM.get_client()
+    response = openai |> LLM.generate_response!(context, :jailbreak, msg.content)
     {msg, response}
   end
 

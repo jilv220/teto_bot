@@ -14,8 +14,19 @@ defmodule TetoBot.LLM do
   @doc """
   Generates a response from the LLM using the conversation context, with support for tool calling.
   """
-  def generate_response!(client, context) do
+  def generate_response!(client, context, :standard) do
     with {:ok, messages} <- MessageBuilder.build_chat_messages(context),
+         {:ok, response} <- create_standard_completion(client, messages) do
+      process_llm_response(client, response, messages)
+    else
+      {:error, reason} ->
+        Logger.error("Failed to generate response: #{inspect(reason)}")
+        raise RuntimeError, message: "Failed to generate response from LLM"
+    end
+  end
+
+  def generate_response!(client, context, :jailbreak, user_message \\ nil) do
+    with {:ok, messages} <- MessageBuilder.build_jailbreak_messages(context, user_message),
          {:ok, response} <- create_standard_completion(client, messages) do
       process_llm_response(client, response, messages)
     else
