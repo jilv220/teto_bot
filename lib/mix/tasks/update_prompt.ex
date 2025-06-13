@@ -120,7 +120,7 @@ defmodule Mix.Tasks.UpdatePrompt do
   end
 
   defp update_prompt_in_redis(prompt, version_label) do
-    case LLM.Context.update_system_prompt(prompt) do
+    case LLM.Prompt.update_system_prompt(prompt) do
       {:ok, _} ->
         Mix.shell().info("System prompt updated successfully to #{version_label}")
 

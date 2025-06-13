@@ -5,7 +5,7 @@ defmodule TetoBot.LLM.MessageBuilder do
 
   require Logger
   alias OpenaiEx.{ChatMessage, MsgContent}
-  alias TetoBot.{Accounts, LLM.Context, LLM.Config}
+  alias TetoBot.{Accounts, LLM.Prompt, LLM.Config}
 
   def build_chat_messages(context) do
     with {:ok, sys_prompt} <- get_enhanced_system_prompt(context) do
@@ -51,7 +51,7 @@ defmodule TetoBot.LLM.MessageBuilder do
   end
 
   defp get_enhanced_system_prompt(context) do
-    case Context.get_system_prompt() do
+    case Prompt.get_system_prompt() do
       {:ok, sys_prompt} ->
         intimacy = fetch_intimacy(context[:guild_id], context[:user_id])
         tier = Accounts.get_tier_name(intimacy)

@@ -1,4 +1,4 @@
-defmodule TetoBot.LLM.Context do
+defmodule TetoBot.LLM.Prompt do
   require Logger
 
   @prompt_key "llm_sys_prompt"
