@@ -12,7 +12,7 @@ defmodule TetoBot.RateLimiting do
   Controls message access using a credit-based refill system.
   - All users start with daily credit refill cap amount
   - Credits refill to daily cap at midnight UTC if below cap
-  - Voting adds vote bonus credits immediately
+  - Voting status checked dynamically via TopggEx API
   - Credits can accumulate but are capped at daily refill
 
   ## Configuration
@@ -55,14 +55,14 @@ defmodule TetoBot.RateLimiting do
   defdelegate allow_user?(user_id), to: UserLimiter, as: :allow?
 
   @doc """
-  Records when a user votes for the bot and adds credit bonus.
-  """
-  defdelegate record_vote(user_id), to: UserLimiter
-
-  @doc """
   Gets a user's current message credits and voting status.
   """
   defdelegate get_user_status(user_id), to: UserLimiter
+
+  @doc """
+  Adds vote bonus credits to a user when they vote (called from webhook).
+  """
+  defdelegate add_vote_credits(user_id), to: UserLimiter
 
   @doc """
   Returns the current configuration for the credit system.

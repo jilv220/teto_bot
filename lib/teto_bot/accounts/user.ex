@@ -62,7 +62,7 @@ defmodule TetoBot.Accounts.User do
     attribute :user_id, :integer, primary_key?: true, allow_nil?: false, public?: true
     attribute :role, User.Role, default: :user
 
-    # Vote tracking for rate limiting
+    # Vote tracking for monitoring purposes
     attribute :last_voted_at, :utc_datetime, public?: true
 
     # Message credits for charging system
@@ -79,22 +79,6 @@ defmodule TetoBot.Accounts.User do
       source_attribute :user_id
       destination_attribute :user_id
     end
-  end
-
-  calculations do
-    calculate :is_voted_user,
-              :boolean,
-              expr(
-                not is_nil(last_voted_at) and
-                  last_voted_at >= fragment("date_trunc('day', NOW() AT TIME ZONE 'UTC')")
-              )
-
-    calculate :has_voted_today,
-              :boolean,
-              expr(
-                not is_nil(last_voted_at) and
-                  last_voted_at >= fragment("date_trunc('day', NOW() AT TIME ZONE 'UTC')")
-              )
   end
 
   aggregates do

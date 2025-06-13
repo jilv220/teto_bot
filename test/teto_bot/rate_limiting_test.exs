@@ -115,14 +115,14 @@ defmodule TetoBot.RateLimitingTest do
     end
   end
 
-  describe "record_vote/1 - vote tracking and credit bonuses" do
+  describe "add_vote_credits/1 - vote tracking and credit bonuses" do
     test "successfully records a vote and adds credit bonus", %{config: config} do
       vote_bonus = config.vote_credit_bonus
       # Get initial credits
       {:ok, initial_status} = RateLimiting.get_user_status(@valid_user_id)
       initial_credits = initial_status.message_credits
 
-      assert :ok = RateLimiting.record_vote(@valid_user_id)
+      assert :ok = RateLimiting.add_vote_credits(@valid_user_id)
 
       # Verify user was created, vote was recorded, and credits were added
       {:ok, user} = Accounts.get_user(@valid_user_id)
@@ -131,14 +131,15 @@ defmodule TetoBot.RateLimitingTest do
       {:ok, status} = RateLimiting.get_user_status(@valid_user_id)
       # Vote bonus
       assert status.message_credits == initial_credits + vote_bonus
-      assert status.has_voted_today == true
-      assert status.is_voted_user == true
+      # Note: has_voted is checked via TopGG API, not local database
+      # In tests, fake user IDs return false from TopGG API
+      assert status.has_voted == false
     end
 
     test "adds credit bonus on each vote", %{config: config} do
       vote_bonus = config.vote_credit_bonus
       # Record first vote
-      assert :ok = RateLimiting.record_vote(@valid_user_id)
+      assert :ok = RateLimiting.add_vote_credits(@valid_user_id)
       {:ok, status1} = RateLimiting.get_user_status(@valid_user_id)
       credits_after_first_vote = status1.message_credits
 
@@ -152,7 +153,7 @@ defmodule TetoBot.RateLimitingTest do
         |> Ash.update()
 
       # Record second vote
-      assert :ok = RateLimiting.record_vote(@valid_user_id)
+      assert :ok = RateLimiting.add_vote_credits(@valid_user_id)
       {:ok, status2} = RateLimiting.get_user_status(@valid_user_id)
 
       # Should have received another vote_bonus credit bonus
@@ -173,7 +174,7 @@ defmodule TetoBot.RateLimitingTest do
       assert credits_before_vote == default_credits - 3
 
       # Record vote
-      assert :ok = RateLimiting.record_vote(@valid_user_id)
+      assert :ok = RateLimiting.add_vote_credits(@valid_user_id)
 
       {:ok, status_after_vote} = RateLimiting.get_user_status(@valid_user_id)
       # (default_credits - 3) + vote_bonus
@@ -181,9 +182,9 @@ defmodule TetoBot.RateLimitingTest do
     end
 
     test "rejects invalid user IDs" do
-      assert {:error, :invalid_user_id} = RateLimiting.record_vote("invalid")
-      assert {:error, :invalid_user_id} = RateLimiting.record_vote(nil)
-      assert {:error, :invalid_user_id} = RateLimiting.record_vote(-1)
+      assert {:error, :invalid_user_id} = RateLimiting.add_vote_credits("invalid")
+      assert {:error, :invalid_user_id} = RateLimiting.add_vote_credits(nil)
+      assert {:error, :invalid_user_id} = RateLimiting.add_vote_credits(-1)
     end
   end
 
@@ -195,8 +196,7 @@ defmodule TetoBot.RateLimitingTest do
       assert %{
                # Default starting credits
                message_credits: ^default_credits,
-               has_voted_today: false,
-               is_voted_user: false
+               has_voted: false
              } = status
     end
 
@@ -212,8 +212,7 @@ defmodule TetoBot.RateLimitingTest do
       assert %{
                # default_credits - 3
                message_credits: expected_credits,
-               has_voted_today: false,
-               is_voted_user: false
+               has_voted: false
              } = status
 
       assert expected_credits == default_credits - 3
@@ -223,7 +222,7 @@ defmodule TetoBot.RateLimitingTest do
       default_credits = config.daily_credit_refill_cap
       vote_bonus = config.vote_credit_bonus
 
-      assert :ok = RateLimiting.record_vote(@valid_user_id)
+      assert :ok = RateLimiting.add_vote_credits(@valid_user_id)
 
       # Use 5 credits
       for _i <- 1..5 do
@@ -235,8 +234,8 @@ defmodule TetoBot.RateLimitingTest do
       assert %{
                # default_credits + vote_bonus - 5 (used)
                message_credits: expected_credits,
-               has_voted_today: true,
-               is_voted_user: true
+               # Note: has_voted is checked via TopGG API, not local database
+               has_voted: false
              } = status
 
       assert expected_credits == default_credits + vote_bonus - 5
@@ -271,7 +270,7 @@ defmodule TetoBot.RateLimitingTest do
       vote_count = 5
 
       for _i <- 1..vote_count do
-        assert :ok = RateLimiting.record_vote(@valid_user_id)
+        assert :ok = RateLimiting.add_vote_credits(@valid_user_id)
       end
 
       {:ok, status} = RateLimiting.get_user_status(@valid_user_id)
@@ -308,7 +307,7 @@ defmodule TetoBot.RateLimitingTest do
       assert status.message_credits == default_credits - 3
 
       # Add vote bonus
-      assert :ok = RateLimiting.record_vote(@valid_user_id)
+      assert :ok = RateLimiting.add_vote_credits(@valid_user_id)
 
       {:ok, final_status} = RateLimiting.get_user_status(@valid_user_id)
       # (default_credits - 3) + vote_bonus (credits accumulated)
@@ -337,12 +336,12 @@ defmodule TetoBot.RateLimitingTest do
     test "voting when already voted today still adds credits", %{config: config} do
       vote_bonus = config.vote_credit_bonus
       # Record first vote
-      assert :ok = RateLimiting.record_vote(@valid_user_id)
+      assert :ok = RateLimiting.add_vote_credits(@valid_user_id)
       {:ok, status1} = RateLimiting.get_user_status(@valid_user_id)
       credits_after_first = status1.message_credits
 
       # Record second vote immediately (simulating multiple votes per day)
-      assert :ok = RateLimiting.record_vote(@valid_user_id)
+      assert :ok = RateLimiting.add_vote_credits(@valid_user_id)
       {:ok, status2} = RateLimiting.get_user_status(@valid_user_id)
 
       # Should still get credit bonus
@@ -357,7 +356,7 @@ defmodule TetoBot.RateLimitingTest do
       vote_count = 20
 
       for _i <- 1..vote_count do
-        assert :ok = RateLimiting.record_vote(@valid_user_id)
+        assert :ok = RateLimiting.add_vote_credits(@valid_user_id)
       end
 
       {:ok, status} = RateLimiting.get_user_status(@valid_user_id)

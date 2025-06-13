@@ -1,13 +1,14 @@
 defmodule TetoBot.Accounts.UserTest do
   @moduledoc """
-  Tests for the User schema, focusing on vote tracking attributes and calculations.
+  Tests for the User schema, focusing on basic user functionality.
 
   Tests cover:
   - User creation and validation
-  - Vote tracking (last_voted_at)
-  - Calculated fields (is_voted_user, has_voted_today)
+  - Vote tracking (last_voted_at) for monitoring purposes
   - Aggregate fields (total_daily_messages)
   - Edge cases and validations
+
+  Note: Vote status checking is now done via TopggEx.Api.has_voted rather than database calculations.
   """
 
   use ExUnit.Case, async: true
@@ -85,85 +86,8 @@ defmodule TetoBot.Accounts.UserTest do
     end
   end
 
-  describe "calculated fields" do
-    test "is_voted_user calculation - vote today" do
-      {:ok, user} = Accounts.create_user(@valid_user_id)
-
-      # Vote earlier today (ensure it's definitely today)
-      today = Date.utc_today()
-      vote_today = DateTime.new!(today, ~T[12:00:00], "Etc/UTC")
-
-      {:ok, updated_user} =
-        user
-        |> Ash.Changeset.for_update(:update, %{last_voted_at: vote_today})
-        |> Ash.update()
-
-      {:ok, loaded_user} = Ash.load(updated_user, :is_voted_user)
-      assert loaded_user.is_voted_user == true
-    end
-
-    test "is_voted_user calculation - vote yesterday" do
-      {:ok, user} = Accounts.create_user(@valid_user_id)
-
-      # Vote yesterday (should be false now since it resets at midnight)
-      yesterday = Date.add(Date.utc_today(), -1)
-      vote_yesterday = DateTime.new!(yesterday, ~T[23:00:00], "Etc/UTC")
-
-      {:ok, updated_user} =
-        user
-        |> Ash.Changeset.for_update(:update, %{last_voted_at: vote_yesterday})
-        |> Ash.update()
-
-      {:ok, loaded_user} = Ash.load(updated_user, :is_voted_user)
-      assert loaded_user.is_voted_user == false
-    end
-
-    test "is_voted_user calculation - no vote" do
-      {:ok, user} = Accounts.create_user(@valid_user_id)
-
-      {:ok, loaded_user} = Ash.load(user, :is_voted_user)
-      assert loaded_user.is_voted_user == false
-    end
-
-    test "has_voted_today calculation - vote today" do
-      {:ok, user} = Accounts.create_user(@valid_user_id)
-
-      # Vote earlier today (ensure it's definitely today)
-      today = Date.utc_today()
-      vote_today = DateTime.new!(today, ~T[12:00:00], "Etc/UTC")
-
-      {:ok, updated_user} =
-        user
-        |> Ash.Changeset.for_update(:update, %{last_voted_at: vote_today})
-        |> Ash.update()
-
-      {:ok, loaded_user} = Ash.load(updated_user, :has_voted_today)
-      assert loaded_user.has_voted_today == true
-    end
-
-    test "has_voted_today calculation - vote yesterday" do
-      {:ok, user} = Accounts.create_user(@valid_user_id)
-
-      # Vote yesterday (should be false now since it resets at midnight)
-      yesterday = Date.add(Date.utc_today(), -1)
-      vote_yesterday = DateTime.new!(yesterday, ~T[23:00:00], "Etc/UTC")
-
-      {:ok, updated_user} =
-        user
-        |> Ash.Changeset.for_update(:update, %{last_voted_at: vote_yesterday})
-        |> Ash.update()
-
-      {:ok, loaded_user} = Ash.load(updated_user, :has_voted_today)
-      assert loaded_user.has_voted_today == false
-    end
-
-    test "has_voted_today calculation - no vote" do
-      {:ok, user} = Accounts.create_user(@valid_user_id)
-
-      {:ok, loaded_user} = Ash.load(user, :has_voted_today)
-      assert loaded_user.has_voted_today == false
-    end
-  end
+  # NOTE: Calculated fields is_voted_user and has_voted were removed
+  # Vote status is now checked via TopggEx.Api.has_voted instead of database calculations
 
   describe "total_daily_messages aggregate" do
     test "aggregates messages across multiple guilds" do
@@ -209,29 +133,8 @@ defmodule TetoBot.Accounts.UserTest do
     end
   end
 
-  describe "loading multiple calculations and aggregates" do
-    test "loads all vote-related calculations together" do
-      {:ok, user} = Accounts.create_user(@valid_user_id)
-
-      # Record a recent vote (earlier today - both calculations should be true)
-      today = Date.utc_today()
-      recent_vote = DateTime.new!(today, ~T[12:00:00], "Etc/UTC")
-
-      {:ok, updated_user} =
-        user
-        |> Ash.Changeset.for_update(:update, %{last_voted_at: recent_vote})
-        |> Ash.update()
-
-      # Load all calculations at once
-      {:ok, loaded_user} =
-        Ash.load(updated_user, [:is_voted_user, :has_voted_today, :total_daily_messages])
-
-      assert loaded_user.is_voted_user == true
-      assert loaded_user.has_voted_today == true
-      assert loaded_user.total_daily_messages == 0
-    end
-
-    test "efficiently loads calculations with message data" do
+  describe "loading aggregates" do
+    test "efficiently loads aggregates" do
       # Setup: Create guild and send messages
       {:ok, _guild} = Guilds.create_guild(@valid_guild_id)
       {:ok, _membership} = Accounts.create_membership(@valid_user_id, @valid_guild_id)
@@ -241,7 +144,7 @@ defmodule TetoBot.Accounts.UserTest do
         {:ok, _} = Accounts.update_user_metrics(@valid_guild_id, @valid_user_id)
       end
 
-      # Record vote (earlier today - both calculations should be true)
+      # Record vote timestamp for monitoring
       {:ok, user} = Accounts.get_user(@valid_user_id)
       today = Date.utc_today()
       recent_vote = DateTime.new!(today, ~T[14:00:00], "Etc/UTC")
@@ -251,13 +154,11 @@ defmodule TetoBot.Accounts.UserTest do
         |> Ash.Changeset.for_update(:update, %{last_voted_at: recent_vote})
         |> Ash.update()
 
-      # Load everything efficiently
-      {:ok, loaded_user} =
-        Ash.load(updated_user, [:is_voted_user, :has_voted_today, :total_daily_messages])
+      # Load aggregates
+      {:ok, loaded_user} = Ash.load(updated_user, [:total_daily_messages])
 
-      assert loaded_user.is_voted_user == true
-      assert loaded_user.has_voted_today == true
       assert loaded_user.total_daily_messages == 7
+      assert loaded_user.last_voted_at != nil
     end
   end
 
@@ -265,16 +166,14 @@ defmodule TetoBot.Accounts.UserTest do
     test "handles nil vote timestamp correctly" do
       {:ok, user} = Accounts.create_user(@valid_user_id)
 
-      {:ok, loaded_user} = Ash.load(user, [:is_voted_user, :has_voted_today])
-
-      assert loaded_user.is_voted_user == false
-      assert loaded_user.has_voted_today == false
+      # User should be created successfully with nil vote timestamp
+      assert user.last_voted_at == nil
     end
 
-    test "handles vote exactly at midnight boundary" do
+    test "handles vote timestamp updates" do
       {:ok, user} = Accounts.create_user(@valid_user_id)
 
-      # Vote exactly at midnight today (should be true)
+      # Vote exactly at midnight today
       today_start = DateTime.new!(Date.utc_today(), ~T[00:00:00], "Etc/UTC")
 
       {:ok, updated_user} =
@@ -282,25 +181,8 @@ defmodule TetoBot.Accounts.UserTest do
         |> Ash.Changeset.for_update(:update, %{last_voted_at: today_start})
         |> Ash.update()
 
-      {:ok, loaded_user} = Ash.load(updated_user, :is_voted_user)
-      # Should be true since it's exactly at the start of today
-      assert loaded_user.is_voted_user == true
-    end
-
-    test "handles vote at midnight boundary for daily check" do
-      {:ok, user} = Accounts.create_user(@valid_user_id)
-
-      # Get today's midnight and subtract 1 second (yesterday)
-      today_start = DateTime.new!(Date.utc_today(), ~T[00:00:00], "Etc/UTC")
-      yesterday_late = DateTime.add(today_start, -1, :second)
-
-      {:ok, updated_user} =
-        user
-        |> Ash.Changeset.for_update(:update, %{last_voted_at: yesterday_late})
-        |> Ash.update()
-
-      {:ok, loaded_user} = Ash.load(updated_user, :has_voted_today)
-      assert loaded_user.has_voted_today == false
+      # Should store the timestamp correctly for monitoring
+      assert updated_user.last_voted_at == today_start
     end
   end
 

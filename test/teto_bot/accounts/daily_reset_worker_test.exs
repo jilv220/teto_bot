@@ -78,7 +78,7 @@ defmodule TetoBot.Accounts.DailyResetWorkerTest do
 
       # Add many credits through voting (above the cap)
       for _i <- 1..10 do
-        assert :ok = RateLimiting.record_vote(@valid_user_id_1)
+        assert :ok = RateLimiting.add_vote_credits(@valid_user_id_1)
       end
 
       {:ok, status_before} = RateLimiting.get_user_status(@valid_user_id_1)
@@ -160,7 +160,7 @@ defmodule TetoBot.Accounts.DailyResetWorkerTest do
       {:ok, _user} = Accounts.create_user(@valid_user_id_1)
 
       # Start with default cap, add vote bonus
-      assert :ok = RateLimiting.record_vote(@valid_user_id_1)
+      assert :ok = RateLimiting.add_vote_credits(@valid_user_id_1)
       {:ok, status_after_vote} = RateLimiting.get_user_status(@valid_user_id_1)
       assert status_after_vote.message_credits == refill_cap + vote_bonus
 
@@ -186,7 +186,7 @@ defmodule TetoBot.Accounts.DailyResetWorkerTest do
       end
 
       # Additional vote should still work
-      assert :ok = RateLimiting.record_vote(@valid_user_id_1)
+      assert :ok = RateLimiting.add_vote_credits(@valid_user_id_1)
       {:ok, status_final} = RateLimiting.get_user_status(@valid_user_id_1)
 
       expected_final =

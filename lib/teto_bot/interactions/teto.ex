@@ -72,14 +72,14 @@ defmodule TetoBot.Interactions.Teto do
          {intimacy, daily_message_count} = _metrics,
          %{
            message_credits: credits,
-           is_voted_user: is_voted
+           has_voted: has_voted
          } = _status,
          guild_id,
          user_id
        ) do
     intimacy_section = build_intimacy_section(intimacy, daily_message_count, guild_id, user_id)
     message_status_section = build_message_status_section(credits)
-    voting_status_section = build_voting_status_section(is_voted)
+    voting_status_section = build_voting_status_section(has_voted)
     reset_info = "🕛 Daily credit recharge happens at **midnight UTC (12am)** each day."
 
     intimacy_section <> message_status_section <> voting_status_section <> reset_info

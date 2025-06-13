@@ -22,12 +22,12 @@ defmodule TetoBot.Web.Router do
         %{"user" => user_id, "type" => "upvote", "bot" => bot_id} ->
           Logger.info("User #{user_id} voted for bot #{bot_id}!")
 
-          case TetoBot.RateLimiting.record_vote(String.to_integer(user_id)) do
+          case TetoBot.RateLimiting.add_vote_credits(String.to_integer(user_id)) do
             :ok ->
-              Logger.info("Successfully recorded vote for user #{user_id}")
+              Logger.info("Successfully added vote credits for user #{user_id}")
 
             {:error, reason} ->
-              Logger.error("Failed to record vote for user #{user_id}: #{inspect(reason)}")
+              Logger.error("Failed to add vote credits for user #{user_id}: #{inspect(reason)}")
           end
 
         %{"user" => user_id, "type" => "test"} ->

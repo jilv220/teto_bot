@@ -22,6 +22,14 @@ defmodule TetoBot.RateLimiting.Behaviour do
   end
 
   @doc """
+  Checks if test environment should bypass external API calls.
+  """
+  @spec bypass_test_apis?() :: boolean()
+  def bypass_test_apis? do
+    Application.get_env(:teto_bot, :env) == :test
+  end
+
+  @doc """
   Logs rate limit decision with consistent format.
   """
   @spec log_decision(String.t(), term(), boolean(), map()) :: :ok
