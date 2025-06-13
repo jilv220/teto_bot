@@ -163,7 +163,7 @@ defmodule TetoBot.Messages do
 
   defp generate_llm_response({msg, context}, :jailbreak) do
     openai = LLM.get_client()
-    response = openai |> LLM.generate_response!(context, :jailbreak, msg.content)
+    response = openai |> LLM.generate_response!(context, :jailbreak)
     {msg, response}
   end
 

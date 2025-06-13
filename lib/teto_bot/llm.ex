@@ -25,8 +25,8 @@ defmodule TetoBot.LLM do
     end
   end
 
-  def generate_response!(client, context, :jailbreak, user_message \\ nil) do
-    with {:ok, messages} <- MessageBuilder.build_jailbreak_messages(context, user_message),
+  def generate_response!(client, context, :jailbreak) do
+    with {:ok, messages} <- MessageBuilder.build_jailbreak_messages(context),
          {:ok, response} <- create_standard_completion(client, messages) do
       process_llm_response(client, response, messages)
     else
