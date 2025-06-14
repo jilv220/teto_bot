@@ -97,9 +97,9 @@ config :teto_bot, TetoBot.RateLimiting,
   daily_credit_refill_cap: 30
 
 config :teto_bot, TetoBot.Messages.Context,
-  lookback_window: 60 * 60 * 24,
-  silence_gap: 60 * 60 * 3,
-  summarization_threshold: 30,
+  lookback_window: 60 * 60 * 12,
+  silence_gap: 60 * 60 * 2,
+  summarization_threshold: 24,
   recent_messages_keep: 6
 
 # Import environment specific config. This must remain at the bottom
