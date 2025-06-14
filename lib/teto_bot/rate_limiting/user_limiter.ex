@@ -7,6 +7,7 @@ defmodule TetoBot.RateLimiting.UserLimiter do
   - Credits refill to daily cap at midnight UTC if below cap
   - Voting adds vote bonus credits immediately
   - Credits can accumulate but are capped at daily refill
+  - Voting status tracked internally (12-hour cooldown)
   - Development environment bypass
 
   ## Configuration
@@ -23,7 +24,7 @@ defmodule TetoBot.RateLimiting.UserLimiter do
       #=> {:ok, true} | {:ok, false} | {:error, reason}
 
       TetoBot.RateLimiting.UserLimiter.get_user_status(user_id)
-      #=> {:ok, %{message_credits: 25, has_voted_today: true}}
+      #=> {:ok, %{message_credits: 25, has_voted: true}}
 
   """
 
@@ -82,8 +83,9 @@ defmodule TetoBot.RateLimiting.UserLimiter do
   @doc """
   Gets a user's current message credits and voting status.
 
-  Returns comprehensive status information including credits and voting status
-  checked via TopggEx API.
+  Returns comprehensive status information including credits and voting status.
+  Voting status is determined by checking if the user has voted within the last 12 hours
+  (TopGG's voting cooldown period).
 
   ## Examples
 
@@ -168,8 +170,9 @@ defmodule TetoBot.RateLimiting.UserLimiter do
 
   defp do_get_user_status(user_id) do
     with {:ok, user} <- get_or_create_user(user_id),
-         {:ok, loaded_user} <- load_user_data(user),
-         {:ok, has_voted} <- check_topgg_vote_status(user_id) do
+         {:ok, loaded_user} <- load_user_data_with_vote_info(user) do
+      has_voted = check_user_vote_status(loaded_user)
+
       status = %{
         message_credits: loaded_user.message_credits || 0,
         has_voted: has_voted
@@ -179,42 +182,15 @@ defmodule TetoBot.RateLimiting.UserLimiter do
     end
   end
 
-  defp check_topgg_vote_status(user_id) do
-    if Behaviour.bypass_test_apis?() do
-      # In test environment, return false to avoid hitting TopGG API
-      {:ok, false}
-    else
-      case get_topgg_api() do
-        {:ok, api} ->
-          case TopggEx.Api.has_voted(api, Integer.to_string(user_id)) do
-            {:ok, voted?} ->
-              {:ok, voted?}
-
-            {:error, reason} ->
-              Logger.warning(
-                "Failed to check TopGG vote status for user #{user_id}: #{inspect(reason)}"
-              )
-
-              # Default to false if API fails
-              {:ok, false}
-          end
-
-        {:error, reason} ->
-          Logger.warning("Failed to create TopGG API client: #{inspect(reason)}")
-          # Default to false if API client creation fails
-          {:ok, false}
-      end
-    end
-  end
-
-  defp get_topgg_api do
-    case Application.get_env(:teto_bot, :topgg_token) do
+  defp check_user_vote_status(user) do
+    case user.last_voted_at do
       nil ->
-        Logger.warning("TopGG token not configured")
-        {:error, :no_token}
+        false
 
-      token ->
-        TopggEx.Api.new(token)
+      last_voted_at ->
+        # TopGG voting cooldown is 12 hours
+        twelve_hours_ago = DateTime.add(DateTime.utc_now(), -12, :hour)
+        DateTime.compare(last_voted_at, twelve_hours_ago) == :gt
     end
   end
 
@@ -239,6 +215,17 @@ defmodule TetoBot.RateLimiting.UserLimiter do
 
       {:error, reason} ->
         Logger.error("Failed to load user data: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+
+  defp load_user_data_with_vote_info(user) do
+    case Ash.load(user, [:message_credits, :last_voted_at]) do
+      {:ok, loaded_user} ->
+        {:ok, loaded_user}
+
+      {:error, reason} ->
+        Logger.error("Failed to load user data with vote info: #{inspect(reason)}")
         {:error, reason}
     end
   end

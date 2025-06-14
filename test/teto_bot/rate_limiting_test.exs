@@ -7,7 +7,7 @@ defmodule TetoBot.RateLimitingTest do
   - User credit-based refill system
   - Credit deduction per message
   - Credit refill to daily cap
-  - Vote credit bonuses
+  - Vote credit bonuses and 12-hour cooldown tracking
   - Daily credit refill
   - Cross-guild credit sharing
   - Edge cases and error handling
@@ -131,9 +131,8 @@ defmodule TetoBot.RateLimitingTest do
       {:ok, status} = RateLimiting.get_user_status(@valid_user_id)
       # Vote bonus
       assert status.message_credits == initial_credits + vote_bonus
-      # Note: has_voted is checked via TopGG API, not local database
-      # In tests, fake user IDs return false from TopGG API
-      assert status.has_voted == false
+      # has_voted is now checked internally via last_voted_at (12-hour cooldown)
+      assert status.has_voted == true
     end
 
     test "adds credit bonus on each vote", %{config: config} do
@@ -142,8 +141,9 @@ defmodule TetoBot.RateLimitingTest do
       assert :ok = RateLimiting.add_vote_credits(@valid_user_id)
       {:ok, status1} = RateLimiting.get_user_status(@valid_user_id)
       credits_after_first_vote = status1.message_credits
+      assert status1.has_voted == true
 
-      # Update vote timestamp to simulate another vote (in real scenario this would be 12 hours later)
+      # Update vote timestamp to simulate cooldown period passed (in real scenario this would be 12 hours later)
       {:ok, user} = Accounts.get_user(@valid_user_id)
       past_time = DateTime.add(DateTime.utc_now(), -13, :hour)
 
@@ -152,12 +152,17 @@ defmodule TetoBot.RateLimitingTest do
         |> Ash.Changeset.for_update(:update, %{last_voted_at: past_time})
         |> Ash.update()
 
+      # Check that voting status is now false after cooldown
+      {:ok, status_after_cooldown} = RateLimiting.get_user_status(@valid_user_id)
+      assert status_after_cooldown.has_voted == false
+
       # Record second vote
       assert :ok = RateLimiting.add_vote_credits(@valid_user_id)
       {:ok, status2} = RateLimiting.get_user_status(@valid_user_id)
 
-      # Should have received another vote_bonus credit bonus
+      # Should have received another vote_bonus credit bonus and voting status should be true again
       assert status2.message_credits == credits_after_first_vote + vote_bonus
+      assert status2.has_voted == true
     end
 
     test "vote credits accumulate with existing credits", %{config: config} do
@@ -179,6 +184,38 @@ defmodule TetoBot.RateLimitingTest do
       {:ok, status_after_vote} = RateLimiting.get_user_status(@valid_user_id)
       # (default_credits - 3) + vote_bonus
       assert status_after_vote.message_credits == credits_before_vote + vote_bonus
+    end
+
+    test "12-hour voting cooldown works correctly", %{config: _config} do
+      # Record first vote
+      assert :ok = RateLimiting.add_vote_credits(@valid_user_id)
+      {:ok, status_after_first_vote} = RateLimiting.get_user_status(@valid_user_id)
+      assert status_after_first_vote.has_voted == true
+
+      # Simulate time passing but still within 12-hour window (11 hours)
+      {:ok, user} = Accounts.get_user(@valid_user_id)
+      eleven_hours_ago = DateTime.add(DateTime.utc_now(), -11, :hour)
+
+      {:ok, _} =
+        user
+        |> Ash.Changeset.for_update(:update, %{last_voted_at: eleven_hours_ago})
+        |> Ash.update()
+
+      # Should still show as voted (within 12-hour window)
+      {:ok, status_within_window} = RateLimiting.get_user_status(@valid_user_id)
+      assert status_within_window.has_voted == true
+
+      # Simulate 13 hours passing (outside 12-hour window)
+      thirteen_hours_ago = DateTime.add(DateTime.utc_now(), -13, :hour)
+
+      {:ok, _} =
+        user
+        |> Ash.Changeset.for_update(:update, %{last_voted_at: thirteen_hours_ago})
+        |> Ash.update()
+
+      # Should now show as not voted (outside 12-hour window)
+      {:ok, status_outside_window} = RateLimiting.get_user_status(@valid_user_id)
+      assert status_outside_window.has_voted == false
     end
 
     test "rejects invalid user IDs" do
@@ -234,8 +271,8 @@ defmodule TetoBot.RateLimitingTest do
       assert %{
                # default_credits + vote_bonus - 5 (used)
                message_credits: expected_credits,
-               # Note: has_voted is checked via TopGG API, not local database
-               has_voted: false
+               # has_voted is now checked internally via last_voted_at (12-hour cooldown)
+               has_voted: true
              } = status
 
       assert expected_credits == default_credits + vote_bonus - 5

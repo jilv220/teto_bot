@@ -12,7 +12,7 @@ defmodule TetoBot.RateLimiting do
   Controls message access using a credit-based refill system.
   - All users start with daily credit refill cap amount
   - Credits refill to daily cap at midnight UTC if below cap
-  - Voting status checked dynamically via TopggEx API
+  - Voting status tracked internally (12-hour cooldown)
   - Credits can accumulate but are capped at daily refill
 
   ## Configuration

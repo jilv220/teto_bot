@@ -22,7 +22,7 @@ defmodule TetoBot.Accounts.DailyResetWorker do
   def perform(_job) do
     Logger.info("DailyResetWorker: Starting daily credit refill and metric reset")
 
-    with {:ok, credit_count} <- recharge_all_credits(),
+    with {:ok, credit_count} <- refill_all_credits(),
          {:ok, reset_count} <- reset_all_daily_metrics() do
       Logger.info(
         "DailyResetWorker: Successfully refilled #{credit_count} users and reset #{reset_count} daily metrics"
@@ -48,7 +48,7 @@ defmodule TetoBot.Accounts.DailyResetWorker do
     |> Oban.insert()
   end
 
-  defp recharge_all_credits do
+  defp refill_all_credits do
     Logger.info("DailyResetWorker: Refilling message credits for users below the daily cap")
 
     refill_cap = RateLimiting.get_daily_credit_refill_cap()

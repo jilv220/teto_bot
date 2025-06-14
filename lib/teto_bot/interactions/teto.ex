@@ -80,7 +80,7 @@ defmodule TetoBot.Interactions.Teto do
     intimacy_section = build_intimacy_section(intimacy, daily_message_count, guild_id, user_id)
     message_status_section = build_message_status_section(credits)
     voting_status_section = build_voting_status_section(has_voted)
-    reset_info = "🕛 Daily credit recharge happens at **midnight UTC (12am)** each day."
+    reset_info = "🕛 Daily credit refill happens at **midnight UTC (12am)** each day."
 
     intimacy_section <> message_status_section <> voting_status_section <> reset_info
   end
@@ -115,10 +115,10 @@ defmodule TetoBot.Interactions.Teto do
   # Builds the voting status section.
   defp build_voting_status_section(is_voted) do
     if is_voted do
-      "✅ **Voting Status**: Active (voted since last reset)\n" <>
-        "🎉 Thanks for voting! Vote again to get **#{RateLimiting.get_vote_credit_bonus()} more credits** immediately!\n\n"
+      "✅ **Voting Status**: Active (voted within 12 hours)\n" <>
+        "🎉 Thanks for voting! You can vote again after 12 hours to get **#{RateLimiting.get_vote_credit_bonus()} more credits**!\n\n"
     else
-      "❌ **Voting Status**: Not voted\n" <>
+      "❌ **Voting Status**: Not voted recently\n" <>
         "💡 Vote for the bot on [top.gg](#{TetoBot.Constants.vote_url()}) " <>
         "to get **#{RateLimiting.get_vote_credit_bonus()} credits** immediately!\n\n"
     end
