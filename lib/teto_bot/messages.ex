@@ -145,7 +145,7 @@ defmodule TetoBot.Messages do
   # Builds context map for LLM processing
   defp build_message_context(msg, guild_id, user_id, channel_id) do
     context = %{
-      messages: TetoBot.MessageContext.get_context(channel_id),
+      messages: Messages.Context.get_context(channel_id),
       guild_id: guild_id,
       user_id: user_id
     }

@@ -75,17 +75,15 @@ config :teto_bot,
   ecto_repos: [TetoBot.Repo],
   pool_size: 10,
   generators: [timestamp_type: :utc_datetime],
-  # Conversion Context
-  lookback_window: 86_400,
-  silence_gap: 10_800,
-  max_context_tokens: 2_000,
-  # Bot settings
+  # LLM settings
   llm_model_name: "meta-llama/llama-4-maverick-17b-128e-instruct",
   llm_vision_model_name: "meta-llama/llama-4-maverick-17b-128e-instruct",
+  llm_summarization_model_name: "llama-3.1-8b-instant",
   llm_max_words: 100,
   llm_temperature: 0.8,
   llm_top_p: 1,
-  llm_top_k: 45
+  llm_top_k: 45,
+  llm_summarization_temperature: 0.3
 
 config :teto_bot, TetoBot.Accounts.Decay,
   inactivity_threshold: :timer.hours(24 * 3),
@@ -97,6 +95,12 @@ config :teto_bot, TetoBot.RateLimiting,
   rate_limit_max_requests: 20,
   vote_credit_bonus: 30,
   daily_credit_refill_cap: 30
+
+config :teto_bot, TetoBot.Messages.Context,
+  lookback_window: 60 * 60 * 24,
+  silence_gap: 60 * 60 * 3,
+  summarization_threshold: 30,
+  recent_messages_keep: 6
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

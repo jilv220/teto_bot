@@ -34,6 +34,8 @@ defmodule TetoBot.Interactions.Leaderboard do
     end
   end
 
+  def build_leaderboard_title(), do: "Teto's Intimacy Leaderboard (Top 10)"
+
   @spec build_and_send_leaderboard(Nostrum.Struct.Interaction.t(), integer(), list()) ::
           :ok | Api.error()
   defp build_and_send_leaderboard(interaction, guild_id, entries) do
@@ -110,7 +112,7 @@ defmodule TetoBot.Interactions.Leaderboard do
     leaderboard = Enum.join(leaderboard_entries, "\n")
 
     """
-    **Teto's Intimacy Leaderboard (Top 10)**
+    **#{build_leaderboard_title()}**
 
     #{leaderboard}
     """

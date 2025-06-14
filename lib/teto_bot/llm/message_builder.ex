@@ -88,6 +88,10 @@ defmodule TetoBot.LLM.MessageBuilder do
     ChatMessage.assistant(content)
   end
 
+  defp format_single_message({:system, _username, content}) when is_binary(content) do
+    ChatMessage.user("Summary of previous conversation: #{content}")
+  end
+
   defp format_single_message(other) do
     Logger.warning("Unexpected message format: #{inspect(other)}")
     nil

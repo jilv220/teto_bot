@@ -1,4 +1,4 @@
-defmodule TetoBot.MessageContext do
+defmodule TetoBot.Messages.Context do
   @moduledoc """
   Builds conversation context for the LLM by reading recent Discord messages from
   `Nostrum.MessageCache`.
@@ -11,19 +11,24 @@ defmodule TetoBot.MessageContext do
   2. **Silence gap cut-off** – Walk backwards from the newest message and stop
      at the first pause longer than `silence_gap`.  This yields the most recent
      continuous conversation while discarding stale, unrelated threads.
-  3. **Token budget trim** – Finally apply a token-aware filter so the selected
-     messages never exceed `max_context_tokens`.
+  3. **Summarization** – If there are too many messages, use a smaller model to
+     summarize older portions of the conversation while preserving the most recent
+     messages for full context.
 
   Configuration keys under `:teto_bot`:
     - `:lookback_window`  – Seconds of history to load (`:infinity` to disable, default `86_400`, i.e. 24 h)
     - `:silence_gap`      – Seconds of allowed pause before we consider it a new topic (default `10_800`, i.e. 3 h)
-    - `:max_context_tokens` – Maximum tokens of history to include (default `2 000`)
+    - `:summarization_threshold` – Number of messages to trigger summarization (default `50`)
+    - `:recent_messages_keep` – Number of recent messages to keep unsummarized (default `10`)
   """
 
   require Logger
+  alias TetoBot.Interactions.Leaderboard
+  alias TetoBot.Interactions.Feed
   alias Nostrum.Cache.MessageCache
   alias Nostrum.Struct.Message
   alias Nostrum.Bot
+  alias TetoBot.LLM
   alias TetoBot.Tokenizer
 
   @doc """
@@ -33,16 +38,20 @@ defmodule TetoBot.MessageContext do
   """
   @spec get_context(integer()) :: [{:user | :assistant, String.t(), String.t()}]
   def get_context(channel_id) do
+    config = Application.get_env(:teto_bot, TetoBot.Messages.Context, [])
+
     # How far back to look when fetching messages. Set to :infinity to disable.
-    lookback_window = Application.get_env(:teto_bot, :lookback_window, 86_400)
+    lookback_window = Keyword.get(config, :lookback_window, 60 * 60 * 24)
 
     # Maximum silence (in seconds) allowed between consecutive messages before we
     # consider it a new topic and stop traversing further back in history.
-    silence_gap = Application.get_env(:teto_bot, :silence_gap, 10_800)
+    silence_gap = Keyword.get(config, :silence_gap, 60 * 60 * 3)
 
-    # Best-effort estimation for how many tokens of history we are willing to
-    # send to the LLM.
-    max_tokens = Application.get_env(:teto_bot, :max_context_tokens, 2_000)
+    # Number of messages that triggers summarization
+    summarization_threshold = Keyword.get(config, :summarization_threshold, 50)
+
+    # Number of recent messages to keep unsummarized
+    recent_messages_keep = Keyword.get(config, :recent_messages_keep, 10)
 
     after_timestamp =
       case lookback_window do
@@ -54,10 +63,11 @@ defmodule TetoBot.MessageContext do
       MessageCache.Mnesia.get_by_channel(channel_id, after_timestamp, :infinity)
       # Filter out empty messages
       |> Enum.filter(&(&1.content != ""))
-      # Reject messages from command /feed
+      # Reject messages from command /feed and /leaderboard
       |> Enum.reject(
-        &(&1.content
-          |> String.contains?("You fed Teto! Your intimacy with her increased"))
+        &(String.contains?(&1.content, Feed.build_feed_success_message()) or
+            String.contains?(&1.content, Feed.build_cooldown_message()) or
+            String.contains?(&1.content, Leaderboard.build_leaderboard_title()))
       )
       |> Enum.map(fn %Message{content: content, author: author, timestamp: timestamp} ->
         role = if author.id == Bot.get_bot_name(), do: :assistant, else: :user
@@ -74,13 +84,16 @@ defmodule TetoBot.MessageContext do
     # previous, unrelated conversation.
     messages = apply_silence_gap(messages, silence_gap)
 
-    # Apply token-aware filtering after silence-gap trimming
-    filtered_messages = apply_token_limit(messages, max_tokens)
+    # Apply summarization if there are too many messages
+    filtered_messages =
+      apply_summarization(messages, summarization_threshold, recent_messages_keep)
 
     filtered_messages
     |> tap(fn msgs ->
-      token_count = get_total_token_count(msgs)
-      Logger.info("channel #{channel_id}: #{length(msgs)} messages, ~#{token_count} tokens")
+      message_count = length(msgs)
+      total_tokens = count_total_tokens(msgs)
+
+      Logger.info("channel #{channel_id}: #{message_count} messages, ~#{total_tokens} tokens")
     end)
     |> Enum.map(fn {role, username, content, _} -> {role, username, content} end)
   end
@@ -115,41 +128,63 @@ defmodule TetoBot.MessageContext do
   defp apply_silence_gap(messages, _), do: messages
 
   @doc false
-  # Applies token-aware filtering to keep messages under the token limit.
-  # Prioritizes recent messages.
-  defp apply_token_limit(messages, max_tokens) do
-    reversed_messages = Enum.reverse(messages)
+  # Applies summarization when there are too many messages.
+  # Keeps the most recent messages and summarizes older ones.
+  defp apply_summarization(messages, threshold, recent_keep) when length(messages) > threshold do
+    {older_messages, recent_messages} = Enum.split(messages, length(messages) - recent_keep)
 
-    {selected_messages, _total_tokens} =
-      Enum.reduce_while(reversed_messages, {[], 0}, fn message, {acc, token_count} ->
-        {_role, _username, content, _timestamp} = message
+    case summarize_messages(older_messages) do
+      {:ok, summary} ->
+        Logger.debug("Chat Summary: #{summary}")
 
-        message_tokens = get_token_count(content)
-        new_token_count = token_count + message_tokens
+        # Create a single summarized message entry
+        summarized_entry = {:system, "Summary", summary, nil}
+        [summarized_entry | recent_messages]
 
-        if new_token_count > max_tokens do
-          {:halt, {acc, token_count}}
-        else
-          {:cont, {[message | acc], new_token_count}}
-        end
-      end)
+      {:error, reason} ->
+        Logger.warning(
+          "Failed to summarize messages: #{inspect(reason)}. Falling back to truncation."
+        )
 
-    selected_messages
+        # Fall back to keeping recent messages only
+        recent_messages
+    end
+  end
+
+  defp apply_summarization(messages, _threshold, _recent_keep), do: messages
+
+  @doc false
+  # Summarizes a list of messages using the LLM module
+  @spec summarize_messages([{atom(), String.t(), String.t(), DateTime.t() | nil}]) ::
+          {:ok, String.t()} | {:error, any()}
+  defp summarize_messages(messages) do
+    try do
+      client = LLM.get_client()
+
+      # Build the conversation text
+      conversation_text =
+        messages
+        |> Enum.map(fn {role, username, content, _timestamp} ->
+          role_label = if role == :assistant, do: "Bot", else: username
+          "#{role_label}: #{content}"
+        end)
+        |> Enum.join("\n")
+
+      # Use the LLM module's summarize_conversation function
+      LLM.summarize_conversation(client, conversation_text)
+    catch
+      error ->
+        Logger.error("Error during summarization: #{inspect(error)}")
+        {:error, error}
+    end
   end
 
   @doc false
-  # Gets the number of tokens in a message.
-  @spec get_token_count(String.t()) :: integer()
-  defp get_token_count(content) do
-    Tokenizer.get_token_count(content)
-  end
-
-  @doc false
-  # Estimates total token count for a list of messages.
-  defp get_total_token_count(messages) do
-    Enum.reduce(messages, 0, fn message, acc ->
-      {_role, _username, content, _timestamp} = message
-      acc + get_token_count(content)
-    end)
+  # Counts the total number of tokens in all message content
+  defp count_total_tokens(messages) do
+    messages
+    |> Enum.map(fn {_role, _username, content, _timestamp} -> content end)
+    |> Enum.join(" ")
+    |> Tokenizer.get_token_count()
   end
 end

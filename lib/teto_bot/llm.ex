@@ -57,6 +57,38 @@ defmodule TetoBot.LLM do
     end
   end
 
+  @doc """
+  Summarizes a conversation using a smaller model.
+  """
+  def summarize_conversation(client, conversation_text) do
+    # Create a single user message with the summarization prompt
+    user_message = %{
+      "role" => "user",
+      "content" => """
+      Please summarize the following Discord conversation in a concise way that preserves the key topics, decisions, and context. Focus on information that would be relevant for continuing the conversation. Keep it under 200 words.
+
+      Conversation:
+      #{conversation_text}
+      """
+    }
+
+    messages = [user_message]
+    chat_req = Client.build_chat_request(messages, :summarization)
+
+    case Client.create_completion(client, chat_req) do
+      {:ok, %{"choices" => [%{"message" => %{"content" => summary}} | _]}}
+      when is_binary(summary) ->
+        {:ok, summary}
+
+      {:ok, response} ->
+        Logger.error("Unexpected summarization response format: #{inspect(response)}")
+        {:error, "Unexpected response format"}
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
   ## Private functions
 
   defp create_standard_completion(client, messages) do

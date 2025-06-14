@@ -20,10 +20,8 @@ defmodule TetoBot.Interactions.Feed do
           execute_feed_command(interaction, user_id, guild_id)
 
         {:error, time_left} ->
-          feed_cooldown_message =
-            "You've already fed Teto today! Try again in #{Format.format_time_left(time_left)}."
-
-          Responses.success(interaction, feed_cooldown_message)
+          interaction
+          |> Responses.success(build_cooldown_message(time_left))
       end
     end)
   end
@@ -34,9 +32,7 @@ defmodule TetoBot.Interactions.Feed do
       {:ok, _changes} ->
         case Accounts.get_intimacy(guild_id, user_id) do
           {:ok, intimacy} ->
-            success_message =
-              "You fed Teto! Your intimacy with her increased by 5.\nCurrent intimacy: #{intimacy}. 💖"
-
+            success_message = build_feed_success_message(intimacy)
             Responses.success(interaction, success_message)
 
           {:error, reason} ->
@@ -46,7 +42,7 @@ defmodule TetoBot.Interactions.Feed do
 
             Responses.success(
               interaction,
-              "You fed Teto! Your intimacy with her increased by 5. 💖"
+              build_feed_success_message()
             )
         end
 
@@ -56,6 +52,22 @@ defmodule TetoBot.Interactions.Feed do
         )
 
         Responses.error(interaction, "Something went wrong while feeding Teto. Please try again.")
+    end
+  end
+
+  def build_cooldown_message(time_left \\ nil) do
+    if time_left do
+      "You've already fed Teto today! Try again in #{Format.format_time_left(time_left)}."
+    else
+      "You've already fed Teto today!"
+    end
+  end
+
+  def build_feed_success_message(intimacy \\ nil) do
+    if intimacy do
+      "You fed Teto! Your intimacy with her increased by 5.\nCurrent intimacy: #{intimacy}. 💖"
+    else
+      "You fed Teto! Your intimacy with her increased by 5."
     end
   end
 end

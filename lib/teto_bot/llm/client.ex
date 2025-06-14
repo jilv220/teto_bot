@@ -60,4 +60,13 @@ defmodule TetoBot.LLM.Client do
       top_k: config.llm_top_k
     )
   end
+
+  def build_chat_request(messages, :summarization) do
+    Chat.Completions.new(
+      model: Config.get(:llm_summarization_model_name),
+      messages: messages,
+      temperature: Config.get(:llm_summarization_temperature),
+      max_tokens: 500
+    )
+  end
 end
