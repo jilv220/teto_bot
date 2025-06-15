@@ -19,22 +19,25 @@ defmodule TetoBot.Application do
       name: :redix, socket_opts: Application.get_env(:teto_bot, :redis_socket_options)
     }
 
-    # HTTP server configuration
-    http_port = Application.get_env(:teto_bot, :http_port, 4000)
-    cowboy_options = [port: http_port]
+    # Redis options for rate limiter
+    redis_rate_limit_options = [
+      url: Application.get_env(:teto_bot, :redis_url),
+      socket_opts: Application.get_env(:teto_bot, :redis_socket_options)
+    ]
 
     children = [
       {Redix, redis_options},
       TetoBot.Repo,
+      # Redis + Bull?
       {Oban, Application.fetch_env!(:teto_bot, Oban)},
-      {TetoBot.RateLimiting.ChannelLimiter, [clean_period: :timer.minutes(1)]},
+      {TetoBot.RateLimiting.ChannelLimiter, redis_rate_limit_options},
       TetoBot.Guilds.Cache,
       TetoBot.Channels.Cache,
+      # tiktoken
       TetoBot.Tokenizer,
       # Finch instance for topgg API
       {Finch, name: :topgg_finch},
-      {Nostrum.Bot, bot_options},
-      {Plug.Cowboy, scheme: :http, plug: TetoBot.Web.Router, options: cowboy_options}
+      {Nostrum.Bot, bot_options}
     ]
 
     result = Supervisor.start_link(children, strategy: :one_for_one)
@@ -43,8 +46,6 @@ defmodule TetoBot.Application do
       # Warm Cache
       Task.start(fn -> TetoBot.Guilds.warm_cache() end)
     end
-
-    Logger.info("HTTP server started on port #{http_port}")
 
     result
   end

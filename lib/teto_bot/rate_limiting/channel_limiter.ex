@@ -1,9 +1,10 @@
 defmodule TetoBot.RateLimiting.ChannelLimiter do
   @moduledoc """
-  Channel-based rate limiter using the Hammer library.
+  Channel-based rate limiter using the Hammer library with Redis backend.
 
   Controls frequency of requests per channel using time-based sliding windows.
   Each channel has a separate counter that resets after the configured window period.
+  Uses Redis for distributed rate limiting across multiple nodes.
 
   ## Configuration
 
@@ -20,7 +21,7 @@ defmodule TetoBot.RateLimiting.ChannelLimiter do
 
   """
 
-  use Hammer, backend: :ets
+  use Hammer, backend: Hammer.Redis
 
   alias TetoBot.RateLimiting.Behaviour
   alias Nostrum.Snowflake
