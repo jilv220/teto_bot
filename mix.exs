@@ -35,7 +35,6 @@ defmodule TetoBot.MixProject do
       {:nostrum, github: "Kraigie/nostrum"},
       {:topgg_ex, "~> 0.1.6"},
       {:openai_ex, "~> 0.9.9"},
-      {:tokenizers, "~> 0.3.0"},
       {:ecto_sql, "~> 3.0"},
       {:postgrex, ">= 0.0.0"},
       {:redix, "~> 1.1"},

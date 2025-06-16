@@ -33,8 +33,7 @@ defmodule TetoBot.Application do
       {TetoBot.RateLimiting.ChannelLimiter, redis_rate_limit_options},
       TetoBot.Guilds.Cache,
       TetoBot.Channels.Cache,
-      # tiktoken
-      TetoBot.Tokenizer,
+      {Finch, name: :tokenizer_finch},
       # Finch instance for topgg API
       {Finch, name: :topgg_finch},
       {Nostrum.Bot, bot_options}

@@ -69,6 +69,8 @@ config :teto_bot,
   dev_guild_id: 1_374_179_000_192_339_979,
   topgg_token: System.get_env("TOPGG_TOKEN"),
   topgg_web_auth_token: System.get_env("TOPGG_WEB_AUTH_TOKEN"),
+  # API Base URL for various services
+  api_base_url: System.get_env("API_BASE_URL", "http://localhost:8000"),
   # DB
   ecto_repos: [TetoBot.Repo],
   pool_size: 10,
