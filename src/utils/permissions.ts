@@ -1,6 +1,9 @@
 import {
   type ChatInputCommandInteraction,
+  type GuildChannel,
+  type Message,
   PermissionFlagsBits,
+  type TextChannel,
 } from 'discord.js'
 import discordBotApi, { isApiError, isValidationError } from '../services/api'
 
@@ -14,6 +17,55 @@ export function hasManageChannelsPermission(
     return false
   }
   return interaction.memberPermissions.has(PermissionFlagsBits.ManageChannels)
+}
+
+/**
+ * Check if the bot has permission to send messages in a channel
+ */
+export function canBotSendMessages(message: Message): boolean {
+  const channel = message.channel
+  const guild = message.guild
+
+  if (!guild || !channel || !('permissionsFor' in channel)) {
+    return false
+  }
+
+  const botMember = guild.members.me
+  if (!botMember) {
+    return false
+  }
+
+  const permissions = (channel as TextChannel).permissionsFor(botMember)
+  if (!permissions) {
+    return false
+  }
+
+  return permissions.has([
+    PermissionFlagsBits.SendMessages,
+    PermissionFlagsBits.ViewChannel,
+  ])
+}
+
+/**
+ * Check if the bot has permission to send messages in a specific channel
+ */
+export function canBotSendMessagesInChannel(channel: GuildChannel): boolean {
+  const guild = channel.guild
+  const botMember = guild.members.me
+
+  if (!botMember || !('permissionsFor' in channel)) {
+    return false
+  }
+
+  const permissions = (channel as TextChannel).permissionsFor(botMember)
+  if (!permissions) {
+    return false
+  }
+
+  return permissions.has([
+    PermissionFlagsBits.SendMessages,
+    PermissionFlagsBits.ViewChannel,
+  ])
 }
 
 /**

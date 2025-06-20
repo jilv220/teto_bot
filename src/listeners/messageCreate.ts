@@ -13,6 +13,7 @@ import {
   buildPromptInjectionMessage,
 } from '../services/llm/prompt'
 import { containsInjection } from '../services/messages/filter'
+import { canBotSendMessages } from '../utils/permissions'
 
 const createLLMResponse = (msg: Message<boolean>, intimacyLevel: number) =>
   Effect.gen(function* () {
@@ -73,6 +74,14 @@ export const messageCreateListener =
     if (!msg.guildId) {
       Effect.logWarning(
         `Skipping message recording: ${msg.author.id} not in a guild`
+      ).pipe(Runtime.runSync(runtime))
+      return
+    }
+
+    // Check if bot has permission to send messages in this channel
+    if (!canBotSendMessages(msg)) {
+      Effect.logWarning(
+        `Bot lacks permission to send messages in channel ${msg.channelId} in guild ${msg.guildId}`
       ).pipe(Runtime.runSync(runtime))
       return
     }
@@ -160,9 +169,15 @@ export const messageCreateListener =
 
     const config = Effect.runSync(appConfig)
     if (isProduction && userMsgRecordRes === 'not enough credit') {
-      await msg.reply(
-        `You've run out of message credits! Vote for the bot to get more credits.\n${config.voteUrl}`
-      )
+      try {
+        await msg.reply(
+          `You've run out of message credits! Vote for the bot to get more credits.\n${config.voteUrl}`
+        )
+      } catch (error) {
+        Effect.logError(`Failed to send 'no credit' message: ${error}`).pipe(
+          Runtime.runSync(runtime)
+        )
+      }
       return
     }
 
@@ -187,7 +202,13 @@ export const messageCreateListener =
           }
         })
 
-      await msg.reply(teasingResponse.content.toString())
+      try {
+        await msg.reply(teasingResponse.content.toString())
+      } catch (error) {
+        Effect.logError(
+          `Failed to send prompt injection response: ${error}`
+        ).pipe(Runtime.runSync(runtime))
+      }
       return
     }
 
@@ -203,10 +224,18 @@ export const messageCreateListener =
     // Send LLM Response
     createLLMResponse(msg, intimacyLevel)
       .pipe(Effect.provide(live), Runtime.runPromise(runtime))
-      .then(async (result) => await msg.reply(result.content.toString()))
-      .catch(() =>
-        Effect.logError(
-          'Failed to create and send llm response: unknown error'
-        ).pipe(Runtime.runSync(runtime))
+      .then(async (result) => {
+        try {
+          await msg.reply(result.content.toString())
+        } catch (error) {
+          Effect.logError(`Failed to send LLM response: ${error}`).pipe(
+            Runtime.runSync(runtime)
+          )
+        }
+      })
+      .catch((error) =>
+        Effect.logError(`Failed to create LLM response: ${error}`).pipe(
+          Runtime.runSync(runtime)
+        )
       )
   }

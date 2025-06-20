@@ -34,16 +34,22 @@ export const interactionCreateListener =
     } catch (error) {
       Effect.logError(error).pipe(Runtime.runSync(runtime))
 
-      if (interaction.replied || interaction.deferred) {
-        await interaction.followUp({
-          content: 'There was an error while executing this command!',
-          flags: MessageFlags.Ephemeral,
-        })
-      } else {
-        await interaction.reply({
-          content: 'There was an error while executing this command!',
-          flags: MessageFlags.Ephemeral,
-        })
+      try {
+        if (interaction.replied || interaction.deferred) {
+          await interaction.followUp({
+            content: 'There was an error while executing this command!',
+            flags: MessageFlags.Ephemeral,
+          })
+        } else {
+          await interaction.reply({
+            content: 'There was an error while executing this command!',
+            flags: MessageFlags.Ephemeral,
+          })
+        }
+      } catch (replyError) {
+        Effect.logError(
+          `Failed to send error response to interaction: ${replyError}`
+        ).pipe(Runtime.runSync(runtime))
       }
     }
   }
