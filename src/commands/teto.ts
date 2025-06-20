@@ -20,44 +20,6 @@ export const data = new SlashCommandBuilder()
   )
 
 /**
- * Handle intimacy error
- */
-async function handleIntimacyError(
-  interaction: ChatInputCommandInteraction,
-  userId: string,
-  guildId: string,
-  reason: unknown
-): Promise<void> {
-  console.error(
-    `Failed to get intimacy info for user ${userId} in guild ${guildId}:`,
-    reason
-  )
-
-  await interaction.reply({
-    content:
-      'Something went wrong while retrieving user intimacy info. Please try again later.',
-    flags: MessageFlags.Ephemeral,
-  })
-}
-
-/**
- * Handle status error
- */
-async function handleStatusError(
-  interaction: ChatInputCommandInteraction,
-  userId: string,
-  reason: unknown
-): Promise<void> {
-  console.error(`Failed to get status for user ${userId}:`, reason)
-
-  await interaction.reply({
-    content:
-      'Something went wrong while retrieving your message status. Please try again later.',
-    flags: MessageFlags.Ephemeral,
-  })
-}
-
-/**
  * Execute the teto command with channel whitelisting
  */
 async function executeTetoCommand(
@@ -103,6 +65,7 @@ async function executeTetoCommand(
 
     await interaction.reply({
       embeds: [embed],
+      flags: MessageFlags.Ephemeral,
     })
   } catch (error) {
     console.error(

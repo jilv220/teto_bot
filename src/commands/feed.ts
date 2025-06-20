@@ -52,7 +52,6 @@ async function executeFeedCommand(
     if (!cooldownCheck.allowed) {
       await interaction.reply({
         content: buildFeedCooldownMessage(cooldownCheck.timeLeft),
-        flags: MessageFlags.Ephemeral,
       })
       return
     }
@@ -86,7 +85,6 @@ async function executeFeedCommand(
     )
     await interaction.reply({
       content: successMessage,
-      flags: MessageFlags.Ephemeral,
     })
   } catch (error) {
     console.error(
