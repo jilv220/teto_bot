@@ -33,12 +33,14 @@ export const systemPromptEffect = Effect.gen(function* () {
 })
 
 export const buildSummaryMessage = () =>
-  'Please summarize the following Discord conversation in a concise way that preserves the key topics, decisions, and context.' +
+  'Please summarize the following Discord group chat conversation in a concise way that preserves the key topics, decisions, and context. ' +
+  'Note: This is a multi-participant group chat - avoid assuming direct conversation between any two people. ' +
   'Focus on information that would be relevant for continuing the conversation. Keep it under 200 words.'
 
 export const buildSummaryExtensionMessage = (summary: string) =>
-  `Previous conversation summary: ${summary}\n\nCreate a new comprehensive summary that` +
+  `Previous conversation summary: ${summary}\n\nCreate a new comprehensive summary that ` +
   'incorporates both the previous summary and the new messages above. ' +
+  'This is a Discord group chat with multiple participants - summarize objectively without assuming personal interactions. ' +
   'Keep the new summary under 200 words and focus on the most important topics, decisions, ' +
   'and context needed for future conversation.'
 

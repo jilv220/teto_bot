@@ -25,6 +25,7 @@ export const LLMConversationModelLive = Layer.effect(
       model: config.conversationModel,
       temperature: 0.8,
       topP: 1,
+      maxCompletionTokens: 225,
       configuration: {
         baseURL: config.openrouterBaseUrl,
       },
@@ -41,7 +42,8 @@ export const LLMSummarizationModelLive = Layer.effect(
     const llmModel = new ChatOpenAI({
       apiKey: config.openrouterApiKey,
       model: config.summarizationModel,
-      temperature: 0.3,
+      temperature: 0.15,
+      maxCompletionTokens: 300,
       configuration: {
         baseURL: config.openrouterBaseUrl,
       },
@@ -60,6 +62,7 @@ export const LLMVisionModelLive = Layer.effect(
       model: config.visionModel,
       temperature: 0.8,
       topP: 1,
+      maxCompletionTokens: 225,
       configuration: {
         baseURL: config.openrouterBaseUrl,
       },
