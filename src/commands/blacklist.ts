@@ -75,6 +75,11 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   }
 
   try {
+    await discordBotApi.discord.ensureUserGuildExists({
+      userId: interaction.user.id,
+      guildId: interaction.guildId,
+    })
+
     // Attempt to blacklist the channel by removing it from the database
     const result = await discordBotApi.channels.deleteChannel(channel.id)
 

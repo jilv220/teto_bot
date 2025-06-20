@@ -67,6 +67,11 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   }
 
   try {
+    await discordBotApi.discord.ensureUserGuildExists({
+      userId: interaction.user.id,
+      guildId: interaction.guildId,
+    })
+
     // Attempt to whitelist the channel by creating it in the database
     const result = await discordBotApi.channels.createChannel({
       channelId: channel.id,
