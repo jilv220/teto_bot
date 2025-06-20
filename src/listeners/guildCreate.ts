@@ -1,12 +1,25 @@
 import type { Guild } from 'discord.js'
-import { Effect, Runtime } from 'effect'
+import { Duration, Effect, Runtime, Schedule } from 'effect'
+import { guildApi } from '../services/api'
 
 export const guildCreateListener =
   (runtime: Runtime.Runtime<never>) => async (guild: Guild) => {
-    // Only needs to log bot join, since we lazily insert guild data with ensureUserGuildExsits
     await Runtime.runPromise(runtime)(
-      Effect.logInfo(
-        `Bot joined new guild: ${guild.name} (${guild.id}) with ${guild.memberCount} members`
+      guildApi.createGuildEffect({ guildId: guild.id }).pipe(
+        Effect.tap(() =>
+          Effect.logInfo(
+            `Bot joined new guild: ${guild.name} (${guild.id}) with ${guild.memberCount} members`
+          )
+        ),
+        Effect.tapError((error) =>
+          Effect.logError(`Bot failed to join new guild: ${error}`)
+        ),
+        Effect.retry({
+          schedule: Schedule.exponential(Duration.millis(100)).pipe(
+            Schedule.jittered
+          ),
+          times: 3,
+        })
       )
     )
   }

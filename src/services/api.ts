@@ -334,6 +334,21 @@ export const guildApi = {
       body: guildData,
     })
   },
+  createGuildEffect: (guildData: CreateGuildRequest) =>
+    Effect.tryPromise({
+      try: () => guildApi.createGuild(guildData),
+      catch: (error) => {
+        if (error instanceof FetchError)
+          return new OfetchError({
+            message: error.message,
+            statusCode: error.statusCode,
+          })
+
+        return new OfetchError({
+          message: error,
+        })
+      },
+    }),
 
   /**
    * Delete a guild
