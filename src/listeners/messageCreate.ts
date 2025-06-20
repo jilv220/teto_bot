@@ -16,7 +16,7 @@ import {
 import { containsInjection } from '../services/messages/filter'
 import { canBotSendMessages, isChannelWhitelisted } from '../utils/permissions'
 
-const createLLMResponse = (msg: Message<boolean>, intimacyLevel: number) =>
+const createLLMResponse = (msg: Message<boolean>, intimacy: number) =>
   Effect.gen(function* () {
     const llm = yield* LLMContext
 
@@ -41,7 +41,7 @@ const createLLMResponse = (msg: Message<boolean>, intimacyLevel: number) =>
     // Create simplified user context with just username and intimacy level
     const userContext = {
       username: msg.author.username,
-      intimacyLevel: intimacyLevel,
+      intimacy: intimacy,
     }
 
     // One thread per channel basically
@@ -51,7 +51,7 @@ const createLLMResponse = (msg: Message<boolean>, intimacyLevel: number) =>
         {
           messages: [new HumanMessage({ content: messageContent })],
           hasImages,
-          userContext, // Pass the simplified user context
+          userContext,
         },
         config
       )
@@ -201,13 +201,13 @@ export const messageCreateListener =
      * Get intimacy level from the user record response
      * Intimacy level will be zero in development
      */
-    const intimacyLevel =
+    const intimacy =
       typeof userMsgRecordRes === 'object' && userMsgRecordRes.data
         ? userMsgRecordRes.data.userGuild.intimacy
         : 0
 
     // Send LLM Response
-    createLLMResponse(msg, intimacyLevel)
+    createLLMResponse(msg, intimacy)
       .pipe(Effect.provide(live), Runtime.runPromise(runtime))
       .then(async (result) => {
         await safeReply(msg, result.content.toString(), runtime)

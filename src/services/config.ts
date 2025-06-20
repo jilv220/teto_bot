@@ -23,13 +23,14 @@ export const appConfig = Effect.gen(function* () {
     summarizationModel: 'meta-llama/llama-3.1-8b-instruct',
     visionModel: 'meta-llama/llama-4-maverick-17b-128e-instruct',
     devGuildId: '1374179000192339979',
-    summarizationThreshold: 22,
-    maxWords: 150,
-    recentMessagesKeep: 5,
     voteUrl: 'https://top.gg/bot/1374166544149512313/vote',
+    maxWords: 150,
+    summarizationThreshold: 22,
+    recentMessagesKeep: 5,
+    conversationGapThreshold: 1000 * 60 * 60 * 2,
     maxRequests: 20,
     windowMs: 1000 * 60,
-    cleanupIntervalMs: 1000 * 5,
+    cleanupIntervalMs: 1000 * 60 * 5,
   }
 })
 

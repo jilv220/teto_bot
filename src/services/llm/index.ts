@@ -8,10 +8,12 @@ import {
   END,
   MemorySaver,
   MessagesAnnotation,
+  REMOVE_ALL_MESSAGES,
   START,
   StateGraph,
 } from '@langchain/langgraph'
 import { Context, Effect, Layer } from 'effect'
+import { passthrough } from 'effect/Schedule'
 import { v4 as uuidv4 } from 'uuid'
 import { appConfig } from '../config'
 import {
@@ -45,13 +47,18 @@ const GraphAnnotation = Annotation.Root({
   // Add user context (username and intimacy level)
   userContext: Annotation<{
     username: string
-    intimacyLevel: number
+    intimacy: number
   }>({
     reducer: (_, action) => action,
     default: () => ({
       username: '',
-      intimacyLevel: 0,
+      intimacy: 0,
     }),
+  }),
+  // Add timestamp for detecting conversation gaps
+  lastMessageTimestamp: Annotation<number>({
+    reducer: (_, action) => action,
+    default: () => Date.now(),
   }),
 })
 
@@ -65,7 +72,7 @@ export const LLMLive = Layer.effect(
     const visionModel = yield* LLMVisionModelContext
 
     // Shared conversation logic
-    const createConversationNode =
+    const createConversation =
       (model: typeof conversationModel) =>
       (state: typeof GraphAnnotation.State) =>
         Effect.gen(function* () {
@@ -99,8 +106,8 @@ export const LLMLive = Layer.effect(
         }).pipe(Effect.runPromise)
 
     // Create specific nodes using the shared logic
-    const conversationNode = createConversationNode(conversationModel)
-    const visionNode = createConversationNode(visionModel)
+    const conversation = createConversation(conversationModel)
+    const vision = createConversation(visionModel)
 
     // Summarization node
     const summarizeConversation = async (
@@ -141,6 +148,31 @@ export const LLMLive = Layer.effect(
       }
     }
 
+    // Delete all messages node
+    const deleteMessages = () => ({
+      messages: [new RemoveMessage({ id: REMOVE_ALL_MESSAGES })],
+    })
+
+    // Check if there's a large gap indicating a new topic
+    const checkConversationGap = (
+      state: typeof GraphAnnotation.State
+    ): 'delete_messages' | 'router' => {
+      const currentTime = Date.now()
+      const { lastMessageTimestamp } = state
+
+      // If gap is larger than configured threshold (e.g., 30 minutes), treat as new topic
+      const gapThresholdMs = config.conversationGapThreshold
+
+      if (currentTime - lastMessageTimestamp > gapThresholdMs) {
+        return 'delete_messages'
+      }
+
+      return 'router'
+    }
+
+    // Don't do anything, just pass through
+    const passThrough = (state: typeof GraphAnnotation.State) => state
+
     // Determine which model to use based on hasImages flag
     const routeToModel = (
       state: typeof GraphAnnotation.State
@@ -154,7 +186,7 @@ export const LLMLive = Layer.effect(
     ): 'summarize_conversation' | typeof END => {
       const messages = state.messages
 
-      // If there are more than MAX_MESSAGES, summarize the conversation
+      // If there are more than summarizationThreshold messages, summarize the conversation
       if (messages.length > config.summarizationThreshold) {
         return 'summarize_conversation'
       }
@@ -165,13 +197,17 @@ export const LLMLive = Layer.effect(
 
     // Create the graph with vision support
     const workflow = new StateGraph(GraphAnnotation)
-      .addNode('conversation', conversationNode)
-      .addNode('vision', visionNode)
+      .addNode('conversation', conversation)
+      .addNode('vision', vision)
       .addNode('summarize_conversation', summarizeConversation)
-      .addConditionalEdges(START, routeToModel)
+      .addNode('delete_messages', deleteMessages)
+      .addNode('router', passthrough)
+      .addConditionalEdges(START, checkConversationGap)
+      .addConditionalEdges('router', routeToModel)
       .addConditionalEdges('conversation', shouldContinue)
       .addConditionalEdges('vision', shouldContinue)
       .addEdge('summarize_conversation', END)
+      .addEdge('delete_messages', 'router')
 
     // Add memory
     const memory = new MemorySaver()
