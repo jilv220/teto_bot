@@ -201,7 +201,7 @@ export const LLMLive = Layer.effect(
       .addNode('vision', vision)
       .addNode('summarize_conversation', summarizeConversation)
       .addNode('delete_messages', deleteMessages)
-      .addNode('router', passthrough)
+      .addNode('router', passThrough)
       .addConditionalEdges(START, checkConversationGap)
       .addConditionalEdges('router', routeToModel)
       .addConditionalEdges('conversation', shouldContinue)
