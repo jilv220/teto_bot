@@ -1,6 +1,6 @@
-import { Data, Effect } from 'effect'
+import { Data, Effect, Runtime } from 'effect'
 import { FetchError, type FetchOptions, ofetch } from 'ofetch'
-import { appConfig } from './config'
+import { appConfig, isDevelopment } from './config'
 
 const config = await Effect.runPromise(appConfig)
 
@@ -19,7 +19,9 @@ export const api = ofetch.create({
   },
   // Handle errors gracefully
   onResponseError({ response }) {
-    console.error(`API Error: ${response.status} - ${response.statusText}`)
+    if (isDevelopment) {
+      console.error(`API Error: ${response.status} - ${response.statusText}`)
+    }
   },
 })
 
