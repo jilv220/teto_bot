@@ -14,7 +14,7 @@ import {
   buildPromptInjectionMessage,
 } from '../services/llm/prompt'
 import { containsInjection } from '../services/messages/filter'
-import { canBotSendMessages } from '../utils/permissions'
+import { canBotSendMessages, isChannelWhitelisted } from '../utils/permissions'
 
 const createLLMResponse = (msg: Message<boolean>, intimacyLevel: number) =>
   Effect.gen(function* () {
@@ -79,18 +79,17 @@ export const messageCreateListener =
       return
     }
 
+    // Check if channel is whitelisted first
+    const channelWhitelisted = await isChannelWhitelisted(
+      msg.channelId,
+      msg.guildId
+    )
+    if (!channelWhitelisted) return
+
     // Check if bot has permission to send messages in this channel
     if (!canBotSendMessages(msg)) {
       Effect.logWarning(
         `Bot lacks permission to send messages in channel ${msg.channelId} in guild ${msg.guildId}`
-      ).pipe(Runtime.runSync(runtime))
-      return
-    }
-
-    // Additional safety check - make sure guild and bot member are available
-    if (msg.guild && !msg.guild.members.me) {
-      Effect.logWarning(
-        `Bot member not found in guild cache for guild ${msg.guildId}, skipping message`
       ).pipe(Runtime.runSync(runtime))
       return
     }

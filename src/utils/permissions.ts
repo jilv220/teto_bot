@@ -70,28 +70,6 @@ export function canBotSendMessages(message: Message): boolean {
 }
 
 /**
- * Check if the bot has permission to send messages in a specific channel
- */
-export function canBotSendMessagesInChannel(channel: GuildChannel): boolean {
-  const guild = channel.guild
-  const botMember = guild.members.me
-
-  if (!botMember || !('permissionsFor' in channel)) {
-    return false
-  }
-
-  const permissions = (channel as TextChannel).permissionsFor(botMember)
-  if (!permissions) {
-    return false
-  }
-
-  return permissions.has([
-    PermissionFlagsBits.SendMessages,
-    PermissionFlagsBits.ViewChannel,
-  ])
-}
-
-/**
  * Check if channel is whitelisted
  */
 export async function isChannelWhitelisted(
