@@ -26,8 +26,14 @@ export function canBotSendMessages(message: Message): boolean {
   const channel = message.channel
   const guild = message.guild
 
-  if (!guild || !channel || !('permissionsFor' in channel)) {
+  // For DM channels, we should be able to send messages
+  if (!guild || !channel) {
     return false
+  }
+
+  // Check if it's a guild channel with permissions
+  if (!('permissionsFor' in channel)) {
+    return true // DM channels or other non-guild channels
   }
 
   const botMember = guild.members.me
@@ -35,15 +41,32 @@ export function canBotSendMessages(message: Message): boolean {
     return false
   }
 
-  const permissions = (channel as TextChannel).permissionsFor(botMember)
-  if (!permissions) {
+  try {
+    const permissions = (channel as TextChannel).permissionsFor(botMember)
+    if (!permissions) {
+      return false
+    }
+
+    // Check for both view and send permissions individually
+    const hasViewChannel = permissions.has(PermissionFlagsBits.ViewChannel)
+    const hasSendMessages = permissions.has(PermissionFlagsBits.SendMessages)
+
+    // Debug logging for permission issues
+    if (!hasViewChannel || !hasSendMessages) {
+      console.log(`Permission check failed for channel ${channel.id}:`, {
+        hasViewChannel,
+        hasSendMessages,
+        botId: botMember.id,
+        guildId: guild.id,
+      })
+    }
+
+    return hasViewChannel && hasSendMessages
+  } catch (error) {
+    // If we can't check permissions, assume we don't have them
+    console.log(`Permission check error for channel ${channel.id}:`, error)
     return false
   }
-
-  return permissions.has([
-    PermissionFlagsBits.SendMessages,
-    PermissionFlagsBits.ViewChannel,
-  ])
 }
 
 /**

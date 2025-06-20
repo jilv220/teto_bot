@@ -6,6 +6,7 @@ import { discordBotApi } from '../services/api'
 import { ChannelRateLimiter } from '../services/channelRateLimiter'
 import { appConfig, isProduction } from '../services/config'
 import { DiscordMessageErorr } from '../services/discord'
+import { safeReply } from '../services/discord'
 import { LLMContext } from '../services/llm'
 import { processImageAttachments } from '../services/llm/attachment'
 import {
@@ -86,6 +87,14 @@ export const messageCreateListener =
       return
     }
 
+    // Additional safety check - make sure guild and bot member are available
+    if (msg.guild && !msg.guild.members.me) {
+      Effect.logWarning(
+        `Bot member not found in guild cache for guild ${msg.guildId}, skipping message`
+      ).pipe(Runtime.runSync(runtime))
+      return
+    }
+
     const maybeMessageId = (messageId: string | undefined) =>
       messageId ? Option.some(messageId) : Option.none()
 
@@ -123,28 +132,15 @@ export const messageCreateListener =
     ).pipe(Effect.provide(live), Runtime.runSync(runtime))
 
     // Send RateLimit Msg
-    const maybeRateLimitMsg = await Effect.when(
-      Effect.tryPromise({
-        try: () => {
-          const secondsUntilReset = Math.ceil(
-            rateLimitRes.timeUntilReset / 1000
-          )
-
-          return msg.reply(
-            `This channel is being rate limited. Please wait ${secondsUntilReset} seconds before sending another message.`
-          )
-        },
-        catch: (error) => new DiscordMessageErorr({ message: error }),
-      }),
-      () => rateLimitRes.isRateLimited
-    )
-      .pipe(
-        Effect.tapError((error) => Effect.logError(error)),
-        Effect.catchAll(() => Option.none())
+    if (rateLimitRes.isRateLimited) {
+      const secondsUntilReset = Math.ceil(rateLimitRes.timeUntilReset / 1000)
+      await safeReply(
+        msg,
+        `This channel is being rate limited. Please wait ${secondsUntilReset} seconds before sending another message.`,
+        runtime
       )
-      .pipe(Runtime.runPromise(runtime))
-
-    if (Option.isSome(maybeRateLimitMsg)) return
+      return
+    }
 
     // Record user message
     const userMsgRecordRes = await discordBotApi.discord
@@ -169,15 +165,11 @@ export const messageCreateListener =
 
     const config = Effect.runSync(appConfig)
     if (isProduction && userMsgRecordRes === 'not enough credit') {
-      try {
-        await msg.reply(
-          `You've run out of message credits! Vote for the bot to get more credits.\n${config.voteUrl}`
-        )
-      } catch (error) {
-        Effect.logError(`Failed to send 'no credit' message: ${error}`).pipe(
-          Runtime.runSync(runtime)
-        )
-      }
+      await safeReply(
+        msg,
+        `You've run out of message credits! Vote for the bot to get more credits.\n${config.voteUrl}`,
+        runtime
+      )
       return
     }
 
@@ -202,13 +194,7 @@ export const messageCreateListener =
           }
         })
 
-      try {
-        await msg.reply(teasingResponse.content.toString())
-      } catch (error) {
-        Effect.logError(
-          `Failed to send prompt injection response: ${error}`
-        ).pipe(Runtime.runSync(runtime))
-      }
+      await safeReply(msg, teasingResponse.content.toString(), runtime)
       return
     }
 
@@ -225,13 +211,7 @@ export const messageCreateListener =
     createLLMResponse(msg, intimacyLevel)
       .pipe(Effect.provide(live), Runtime.runPromise(runtime))
       .then(async (result) => {
-        try {
-          await msg.reply(result.content.toString())
-        } catch (error) {
-          Effect.logError(`Failed to send LLM response: ${error}`).pipe(
-            Runtime.runSync(runtime)
-          )
-        }
+        await safeReply(msg, result.content.toString(), runtime)
       })
       .catch((error) =>
         Effect.logError(`Failed to create LLM response: ${error}`).pipe(
