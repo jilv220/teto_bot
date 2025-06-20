@@ -85,7 +85,8 @@ export async function isChannelWhitelisted(
 
     return result.data.channel.guildId === guildId
   } catch (error) {
-    console.error('Error checking channel whitelist:', error)
+    // TODO: Fix this later
+    // console.error('Error checking channel whitelist:', error)
     return false
   }
 }
