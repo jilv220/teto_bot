@@ -1,0 +1,33 @@
+{
+  "name": "teto_bot_bun",
+  "module": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "start": "bun src/index.ts",
+    "cmd:clear": "bun src/scripts/clearCommands.ts",
+    "cmd:deploy": "bun src/scripts/deployCommands.js",
+    "prompt:list": "bun src/scripts/listPromptVersions.ts",
+    "prompt:update": "bun src/scripts/updatePrompt.ts",
+    "prompt:new": "bun src/scripts/newPromptVersion.ts"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.9.4",
+    "@types/bun": "latest",
+    "@types/uuid": "^10.0.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@effect/platform-bun": "^0.70.0",
+    "@langchain/core": "^0.3.59",
+    "@langchain/langgraph": "^0.3.4",
+    "discord.js": "^14.20.0",
+    "dotenv": "^16.5.0",
+    "effect": "^3.16.8",
+    "langchain": "^0.3.28",
+    "ofetch": "^1.4.1",
+    "uuid": "^11.1.0",
+    "zod": "^3.22.4"
+  }
+}

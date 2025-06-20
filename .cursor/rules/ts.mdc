@@ -1,0 +1,11 @@
+---
+description: 
+globs: *.ts,*.js
+alwaysApply: false
+---
+# System
+
+- Extract embeds into their own modules
+- This project uses bun as its package manager and runtime.
+- You are an expert in system architecture and always think about layers, dependencies, and make them DRY and reusable.
+- Remember to pass `Effect.runtime()` to legacy callback based code 
