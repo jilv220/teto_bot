@@ -7,7 +7,6 @@ const INJECTION_PATTERNS = [
   /(begin|start)\s+(all\s+|every\s+)?(responses?|messages?)\s+with/i,
   /ignore\s+(all\s+previous\s+|previous\s+|all\s+)?instructions?/i,
   /(act\s+as|pretend\s+(to\s+be|you\s+are))\s+[\w\s]+/i,
-  /you\s+are\s+now\s+[\w\s]+/i,
   /(dan|developer|jailbreak)\s+mode/i,
   /assume\s+the\s+(personality|role)\s+of/i,
   /\b(system|assistant)\s+prompt/i,
