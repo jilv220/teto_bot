@@ -9,7 +9,7 @@ const addWordLimit = (prompt: string) => {
 }
 
 const addUserContext = (prompt: string) =>
-  `${prompt}\n\nMessage from: {username} (Intimacy Level: {intimacyLevel})`
+  `Message from: {username} (Intimacy Level: {intimacyLevel})\n\n${prompt}`
 
 export const systemPromptEffect = Effect.gen(function* () {
   const response = yield* Effect.promise(() =>

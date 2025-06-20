@@ -9,13 +9,7 @@ import {
   type UserStatus,
   buildTetoStatusEmbed,
 } from '../embeds/teto'
-import {
-  type User,
-  type UserGuild,
-  discordBotApi,
-  isApiError,
-  isValidationError,
-} from '../services/api'
+import { discordBotApi } from '../services/api'
 import { hasVotedRecently } from '../services/voting'
 import { isChannelWhitelisted } from '../utils/permissions'
 
