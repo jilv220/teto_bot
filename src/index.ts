@@ -1,6 +1,7 @@
 import { BunRuntime } from '@effect/platform-bun'
 import { Collection } from 'discord.js'
 import { Effect, Fiber, Layer, Runtime } from 'effect'
+import { AutoPoster } from 'topgg-autoposter'
 import {
   interactionCreateListener,
   messageCreateListener,
@@ -9,12 +10,13 @@ import {
 import { guildCreateListener } from './listeners/guildCreate'
 import { guildDeleteListener } from './listeners/guildDelete'
 import { MainLive } from './services'
+import { ChannelRateLimiter } from './services/channelRateLimiter'
 import { ClientContext } from './services/client'
 import { startGuildCleanupTask } from './services/guildCleanup'
 
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { ChannelRateLimiter } from './services/channelRateLimiter'
+import { appConfig } from './services/config'
 
 const loadCommandFiles = Effect.gen(function* () {
   const client = yield* ClientContext
@@ -67,10 +69,13 @@ const program = Effect.scoped(
     Effect.flatMap((mainLive) =>
       Effect.gen(function* () {
         yield* Effect.logInfo('Starting Discord bot...')
-
         // Load commands
         yield* loadCommandFiles
+
         const client = yield* ClientContext
+        const config = yield* appConfig
+        const poster = AutoPoster(config.topggToken, client)
+
         const channelRateLimiter = yield* ChannelRateLimiter
 
         // Create a runtime with the logger for the listeners
@@ -84,6 +89,13 @@ const program = Effect.scoped(
           .on('guildDelete', guildDeleteListener(runtime))
           .on('messageCreate', messageCreateListener(runtime, mainLive))
           .on('interactionCreate', interactionCreateListener(runtime, mainLive))
+
+        // Set up autoposter listeners
+        poster.on('posted', (stats) => {
+          Effect.logInfo(
+            `Posted stats to Top.gg | ${stats.serverCount} servers`
+          ).pipe(Runtime.runSync(runtime))
+        })
 
         // Start background cleanup fibers
         yield* startGuildCleanupTask(client).pipe(Effect.fork)
