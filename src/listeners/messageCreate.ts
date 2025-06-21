@@ -1,7 +1,7 @@
 import { type AIMessageChunk, HumanMessage } from '@langchain/core/messages'
 import type { Message } from 'discord.js'
 import { Effect, Either, Match, Option, Runtime, pipe } from 'effect'
-import { ApiService, type MainLive } from '../services'
+import { ApiService, ChannelService, type MainLive } from '../services'
 import { ChannelRateLimiter } from '../services/channelRateLimiter'
 import { appConfig, isProduction } from '../services/config'
 import { safeReply } from '../services/discord'
@@ -12,7 +12,7 @@ import {
   buildPromptInjectionMessage,
 } from '../services/llm/prompt'
 import { containsInjection } from '../services/messages/filter'
-import { canBotSendMessages, isChannelWhitelisted } from '../utils/permissions'
+import { canBotSendMessages } from '../utils/permissions'
 
 const createLLMResponse = (msg: Message<boolean>, intimacy: number) =>
   Effect.gen(function* () {
@@ -78,8 +78,12 @@ export const messageCreateListener =
     }
 
     // Check if channel is whitelisted first
-    const channelWhitelisted = await isChannelWhitelisted(msg.channelId)
-    if (!channelWhitelisted) return
+    const isChannelWhitelisted = await ChannelService.pipe(
+      Effect.flatMap(({ isChannelWhitelisted }) =>
+        isChannelWhitelisted(msg.channelId)
+      )
+    ).pipe(Effect.provide(live), Runtime.runPromise(runtime))
+    if (!isChannelWhitelisted) return
 
     // Check if bot has permission to send messages in this channel
     if (!canBotSendMessages(msg)) {

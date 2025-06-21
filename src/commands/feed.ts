@@ -4,15 +4,19 @@ import {
   SlashCommandBuilder,
 } from 'discord.js'
 import { Effect, Either, Runtime } from 'effect'
-import { ApiService, type MainLive } from '../services'
-import { type ApiError, effectApi } from '../services/api/client'
+import {
+  ApiService,
+  ChannelNotWhitelistedError,
+  ChannelService,
+  type MainLive,
+} from '../services'
+import { ApiError, effectApi } from '../services/api/client'
 import {
   buildFeedCooldownMessage,
   buildFeedSuccessMessage,
   checkFeedCooldown,
 } from '../services/feed'
 import { FEED_INTIMACY_GAIN } from '../services/teto'
-import { isChannelWhitelisted } from '../utils/permissions'
 
 export const data = new SlashCommandBuilder()
   .setName('feed')
@@ -27,11 +31,28 @@ type FeedResult =
  */
 const executeFeedEffect = (
   userId: string,
-  guildId: string
-): Effect.Effect<FeedResult, ApiError, ApiService> =>
+  guildId: string,
+  channelId: string
+): Effect.Effect<
+  FeedResult,
+  ApiError | ChannelNotWhitelistedError,
+  ApiService | ChannelService
+> =>
   Effect.gen(function* () {
     const apiService = yield* ApiService
     const effectApi = apiService.effectApi
+
+    const channelService = yield* ChannelService
+    const isChannelWhitelisted =
+      yield* channelService.isChannelWhitelisted(channelId)
+
+    if (!isChannelWhitelisted) {
+      return yield* Effect.fail(
+        new ChannelNotWhitelistedError({
+          message: 'This command can only be used in whitelisted channels.',
+        })
+      )
+    }
 
     // First ensure user exists and get current user guild data
     const ensureResult = yield* effectApi.discord.ensureUserGuildExists({
@@ -68,19 +89,12 @@ const executeFeedEffect = (
       message: buildFeedSuccessMessage(updateResult.data.userGuild.intimacy),
     }
   }).pipe(
-    Effect.tapError((error: ApiError) =>
+    Effect.tapError((error) =>
       Effect.logError(
         `Failed to feed Teto for user ${userId} in guild ${guildId}: ${error.message}`
       )
     )
   )
-
-/**
- * Build error message for feed failures
- */
-function buildFeedErrorMessage(error: ApiError): string {
-  return 'Something went wrong while feeding Teto. Please try again.'
-}
 
 export async function execute(
   runtime: Runtime.Runtime<never>,
@@ -99,18 +113,8 @@ export async function execute(
     return
   }
 
-  // Check if channel is whitelisted
-  const isWhitelisted = await isChannelWhitelisted(channelId)
-  if (!isWhitelisted) {
-    await interaction.reply({
-      content: 'This command can only be used in whitelisted channels.',
-      flags: MessageFlags.Ephemeral,
-    })
-    return
-  }
-
   // Convert Effect to Either and run it
-  const program = executeFeedEffect(userId, guildId).pipe(
+  const program = executeFeedEffect(userId, guildId, channelId).pipe(
     Effect.either,
     Effect.provide(live)
   )
@@ -118,12 +122,19 @@ export async function execute(
 
   // Handle Either result
   if (Either.isLeft(result)) {
-    // Error case
-    const errorMessage = buildFeedErrorMessage(result.left)
-    await interaction.reply({
-      content: errorMessage,
-      flags: MessageFlags.Ephemeral,
-    })
+    if (result.left instanceof ChannelNotWhitelistedError) {
+      await interaction.reply({
+        content: result.left.message,
+        flags: MessageFlags.Ephemeral,
+      })
+    }
+
+    if (result.left instanceof ApiError) {
+      await interaction.reply({
+        content: 'Something went wrong while feeding Teto. Please try again.',
+        flags: MessageFlags.Ephemeral,
+      })
+    }
   } else {
     // Success case - handle both success and cooldown
     const feedResult = result.right

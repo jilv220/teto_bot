@@ -10,10 +10,9 @@ import {
   type UserStatus,
   buildTetoStatusEmbed,
 } from '../embeds/teto'
-import { ApiService, type MainLive } from '../services'
+import { ApiService, ChannelService, type MainLive } from '../services'
 import type { ApiError } from '../services/api/client'
 import { hasVotedRecently } from '../services/voting'
-import { isChannelWhitelisted } from '../utils/permissions'
 
 export const data = new SlashCommandBuilder()
   .setName('teto')
@@ -28,13 +27,22 @@ type TetoResult = {
 }
 
 /**
- * Effect-based teto operation
+ * Effect-based teto operation with channel whitelist check
  */
-const fetchTetoDataEffect = (
+const executeTetoEffect = (
   userId: string,
-  guildId: string
-): Effect.Effect<TetoResult, ApiError, ApiService> =>
+  guildId: string,
+  channelId: string
+): Effect.Effect<TetoResult, ApiError | string, ChannelService | ApiService> =>
   Effect.gen(function* () {
+    // Check if channel is whitelisted first
+    const channelService = yield* ChannelService
+    const isWhitelisted = yield* channelService.isChannelWhitelisted(channelId)
+
+    if (!isWhitelisted) {
+      return yield* Effect.fail('channel not whitelisted' as const)
+    }
+
     const apiService = yield* ApiService
     const effectApi = apiService.effectApi
 
@@ -66,7 +74,7 @@ const fetchTetoDataEffect = (
   }).pipe(
     Effect.tapError((error) =>
       Effect.logError(
-        `Failed to fetch teto data for user ${userId} in guild ${guildId}: ${error.message}`
+        `Failed to execute teto command for user ${userId} in guild ${guildId}: ${error}`
       )
     )
   )
@@ -79,22 +87,28 @@ async function executeTetoCommand(
   live: typeof MainLive,
   interaction: ChatInputCommandInteraction,
   userId: string,
-  guildId: string
+  guildId: string,
+  channelId: string
 ): Promise<void> {
-  // Convert Effect to Either and run it
-  const program = fetchTetoDataEffect(userId, guildId).pipe(
-    Effect.either,
-    Effect.provide(live)
+  const program = executeTetoEffect(userId, guildId, channelId).pipe(
+    Effect.provide(live),
+    Effect.either
   )
   const result = await Runtime.runPromise(runtime)(program)
 
   // Handle Either result
   if (Either.isLeft(result)) {
-    // Error case
-    await interaction.reply({
-      content: 'Something went wrong. Please try again later.',
-      flags: MessageFlags.Ephemeral,
-    })
+    if (result.left === 'channel not whitelisted') {
+      await interaction.reply({
+        content: 'This command can only be used in whitelisted channels.',
+        flags: MessageFlags.Ephemeral,
+      })
+    } else {
+      await interaction.reply({
+        content: 'Something went wrong. Please try again later.',
+        flags: MessageFlags.Ephemeral,
+      })
+    }
     return
   }
 
@@ -138,14 +152,12 @@ export async function execute(
     return
   }
 
-  const isWhitelisted = await isChannelWhitelisted(channelId)
-  if (!isWhitelisted) {
-    await interaction.reply({
-      content: 'This command can only be used in whitelisted channels.',
-      flags: MessageFlags.Ephemeral,
-    })
-    return
-  }
-
-  await executeTetoCommand(runtime, live, interaction, userId, guildId)
+  await executeTetoCommand(
+    runtime,
+    live,
+    interaction,
+    userId,
+    guildId,
+    channelId
+  )
 }

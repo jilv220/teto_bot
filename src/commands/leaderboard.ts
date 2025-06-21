@@ -7,9 +7,8 @@ import {
 } from 'discord.js'
 import { Effect, Either, Runtime } from 'effect'
 import { buildLeaderboardEmbed } from '../embeds/leaderboard'
-import { ApiService, type MainLive } from '../services'
+import { ApiService, ChannelService, type MainLive } from '../services'
 import type { ApiError, LeaderboardEntry } from '../services/api/client'
-import { isChannelWhitelisted } from '../utils/permissions'
 
 const API_TIMEOUT = 2000
 
@@ -157,15 +156,36 @@ const fetchLeaderboardEffect = (
     )
   )
 
-/**
- * Handle leaderboard command interaction using Effect
- */
-async function handleLeaderboard(
+export async function execute(
   runtime: Runtime.Runtime<never>,
   live: typeof MainLive,
-  interaction: ChatInputCommandInteraction,
-  guildId: string
-): Promise<void> {
+  interaction: ChatInputCommandInteraction
+) {
+  const guildId = interaction.guildId
+  const channelId = interaction.channelId
+
+  if (!guildId) {
+    await interaction.reply({
+      content: 'This command can only be used in a server.',
+      flags: MessageFlags.Ephemeral,
+    })
+    return
+  }
+
+  const isChannelWhitelisted = await ChannelService.pipe(
+    Effect.flatMap(({ isChannelWhitelisted }) =>
+      isChannelWhitelisted(channelId)
+    )
+  ).pipe(Effect.provide(live), Runtime.runPromise(runtime))
+
+  if (!isChannelWhitelisted) {
+    await interaction.reply({
+      content: 'This command can only be used in whitelisted channels.',
+      flags: MessageFlags.Ephemeral,
+    })
+    return
+  }
+
   // Convert Effect to Either and run it
   const program = fetchLeaderboardEffect(guildId).pipe(
     Effect.either,
@@ -193,33 +213,4 @@ async function handleLeaderboard(
   }
 
   await buildAndSendLeaderboard(interaction, entries)
-}
-
-export async function execute(
-  runtime: Runtime.Runtime<never>,
-  live: typeof MainLive,
-  interaction: ChatInputCommandInteraction
-) {
-  const guildId = interaction.guildId
-  const channelId = interaction.channelId
-
-  if (!guildId) {
-    await interaction.reply({
-      content: 'This command can only be used in a server.',
-      flags: MessageFlags.Ephemeral,
-    })
-    return
-  }
-
-  // Check if channel is whitelisted
-  const isWhitelisted = await isChannelWhitelisted(channelId)
-  if (!isWhitelisted) {
-    await interaction.reply({
-      content: 'This command can only be used in whitelisted channels.',
-      flags: MessageFlags.Ephemeral,
-    })
-    return
-  }
-
-  await handleLeaderboard(runtime, live, interaction, guildId)
 }
