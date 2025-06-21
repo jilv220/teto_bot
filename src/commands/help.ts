@@ -5,6 +5,7 @@ import {
 } from 'discord.js'
 import type { Runtime } from 'effect'
 import { type CommandInfo, buildHelpEmbed } from '../embeds/help'
+import type { MainLive } from '../services'
 
 export const data = new SlashCommandBuilder()
   .setName('help')
@@ -49,6 +50,7 @@ function getAvailableCommands(
 
 export async function execute(
   runtime: Runtime.Runtime<never>,
+  live: typeof MainLive,
   interaction: ChatInputCommandInteraction
 ) {
   try {

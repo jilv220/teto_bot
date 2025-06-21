@@ -30,7 +30,7 @@ export const interactionCreateListener =
     }
 
     try {
-      await command.execute(runtime, interaction)
+      await command.execute(runtime, live, interaction)
     } catch (error) {
       Effect.logError(error).pipe(Runtime.runSync(runtime))
 

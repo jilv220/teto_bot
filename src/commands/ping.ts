@@ -3,6 +3,7 @@ import {
   SlashCommandBuilder,
 } from 'discord.js'
 import type { Runtime } from 'effect'
+import type { MainLive } from '../services'
 
 export const data = new SlashCommandBuilder()
   .setName('ping')
@@ -10,6 +11,7 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(
   runtime: Runtime.Runtime<never>,
+  live: typeof MainLive,
   interaction: ChatInputCommandInteraction
 ) {
   await interaction.reply('pong')

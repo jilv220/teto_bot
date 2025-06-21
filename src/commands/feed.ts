@@ -4,7 +4,7 @@ import {
   SlashCommandBuilder,
 } from 'discord.js'
 import { Effect, Either, Runtime } from 'effect'
-import { ApiService, MainLive } from '../services'
+import { ApiService, type MainLive } from '../services'
 import { type ApiError, effectApi } from '../services/api/client'
 import {
   buildFeedCooldownMessage,
@@ -84,6 +84,7 @@ function buildFeedErrorMessage(error: ApiError): string {
 
 export async function execute(
   runtime: Runtime.Runtime<never>,
+  live: typeof MainLive,
   interaction: ChatInputCommandInteraction
 ) {
   const userId = interaction.user.id
@@ -111,7 +112,7 @@ export async function execute(
   // Convert Effect to Either and run it
   const program = executeFeedEffect(userId, guildId).pipe(
     Effect.either,
-    Effect.provide(MainLive)
+    Effect.provide(live)
   )
   const result = await Runtime.runPromise(runtime)(program)
 

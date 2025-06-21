@@ -7,7 +7,7 @@ import {
 } from 'discord.js'
 import { Effect, Either, Runtime } from 'effect'
 import { buildLeaderboardEmbed } from '../embeds/leaderboard'
-import { ApiService, MainLive } from '../services'
+import { ApiService, type MainLive } from '../services'
 import type { ApiError, LeaderboardEntry } from '../services/api/client'
 import { isChannelWhitelisted } from '../utils/permissions'
 
@@ -162,13 +162,14 @@ const fetchLeaderboardEffect = (
  */
 async function handleLeaderboard(
   runtime: Runtime.Runtime<never>,
+  live: typeof MainLive,
   interaction: ChatInputCommandInteraction,
   guildId: string
 ): Promise<void> {
   // Convert Effect to Either and run it
   const program = fetchLeaderboardEffect(guildId).pipe(
     Effect.either,
-    Effect.provide(MainLive)
+    Effect.provide(live)
   )
   const result = await Runtime.runPromise(runtime)(program)
 
@@ -196,6 +197,7 @@ async function handleLeaderboard(
 
 export async function execute(
   runtime: Runtime.Runtime<never>,
+  live: typeof MainLive,
   interaction: ChatInputCommandInteraction
 ) {
   const guildId = interaction.guildId
@@ -219,5 +221,5 @@ export async function execute(
     return
   }
 
-  await handleLeaderboard(runtime, interaction, guildId)
+  await handleLeaderboard(runtime, live, interaction, guildId)
 }

@@ -5,7 +5,7 @@ import {
   SlashCommandBuilder,
 } from 'discord.js'
 import { Effect, Either, Runtime } from 'effect'
-import { MainLive } from '../services'
+import type { MainLive } from '../services'
 import { type ApiError, ApiService, effectApi } from '../services/api'
 import { hasManageChannelsPermission } from '../utils/permissions'
 
@@ -65,6 +65,7 @@ const blacklistChannelEffect = (
 
 export async function execute(
   runtime: Runtime.Runtime<never>,
+  live: typeof MainLive,
   interaction: ChatInputCommandInteraction
 ) {
   // Check permissions
@@ -91,7 +92,7 @@ export async function execute(
     channel.id,
     interaction.user.id,
     interaction.guildId
-  ).pipe(Effect.either, Effect.provide(MainLive))
+  ).pipe(Effect.either, Effect.provide(live))
   const result = await Runtime.runPromise(runtime)(program)
 
   // Handle Either result

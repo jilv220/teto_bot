@@ -3,7 +3,7 @@ import { Duration, Schedule } from 'effect'
 import { FetchError, type FetchOptions, ofetch } from 'ofetch'
 import { appConfig, isDevelopment } from '../config'
 
-const config = await Effect.runPromise(appConfig)
+const config = Effect.runSync(appConfig)
 
 // Create ofetch instance with default configuration
 export const api = ofetch.create({
@@ -752,7 +752,7 @@ export const withRetry = <T>(
  */
 export const withTimeout = <T>(
   effect: Effect.Effect<T, ApiError>,
-  duration = Duration.seconds(30)
+  duration = Duration.seconds(2)
 ): Effect.Effect<T, ApiError> =>
   effect.pipe(
     Effect.timeout(duration),

@@ -10,7 +10,7 @@ import {
   type UserStatus,
   buildTetoStatusEmbed,
 } from '../embeds/teto'
-import { ApiService, MainLive } from '../services'
+import { ApiService, type MainLive } from '../services'
 import type { ApiError } from '../services/api/client'
 import { hasVotedRecently } from '../services/voting'
 import { isChannelWhitelisted } from '../utils/permissions'
@@ -76,6 +76,7 @@ const fetchTetoDataEffect = (
  */
 async function executeTetoCommand(
   runtime: Runtime.Runtime<never>,
+  live: typeof MainLive,
   interaction: ChatInputCommandInteraction,
   userId: string,
   guildId: string
@@ -83,7 +84,7 @@ async function executeTetoCommand(
   // Convert Effect to Either and run it
   const program = fetchTetoDataEffect(userId, guildId).pipe(
     Effect.either,
-    Effect.provide(MainLive)
+    Effect.provide(live)
   )
   const result = await Runtime.runPromise(runtime)(program)
 
@@ -122,6 +123,7 @@ async function executeTetoCommand(
 
 export async function execute(
   runtime: Runtime.Runtime<never>,
+  live: typeof MainLive,
   interaction: ChatInputCommandInteraction
 ) {
   const userId = interaction.user.id
@@ -145,5 +147,5 @@ export async function execute(
     return
   }
 
-  await executeTetoCommand(runtime, interaction, userId, guildId)
+  await executeTetoCommand(runtime, live, interaction, userId, guildId)
 }
