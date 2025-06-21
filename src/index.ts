@@ -1,6 +1,6 @@
 import { BunRuntime } from '@effect/platform-bun'
 import { Collection } from 'discord.js'
-import { Effect, Fiber, Layer, Runtime } from 'effect'
+import { Effect, Layer, Runtime } from 'effect'
 import { AutoPoster } from 'topgg-autoposter'
 import {
   interactionCreateListener,

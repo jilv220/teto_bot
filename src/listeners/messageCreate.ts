@@ -1,11 +1,9 @@
 import { type AIMessageChunk, HumanMessage } from '@langchain/core/messages'
 import type { Message } from 'discord.js'
-import { Effect, Match, Option, Runtime, pipe } from 'effect'
-import type { MainLive } from '../services'
-import { discordBotApi } from '../services/api'
+import { Effect, Either, Match, Option, Runtime, pipe } from 'effect'
+import { ApiService, type MainLive } from '../services'
 import { ChannelRateLimiter } from '../services/channelRateLimiter'
 import { appConfig, isProduction } from '../services/config'
-import { DiscordMessageErorr } from '../services/discord'
 import { safeReply } from '../services/discord'
 import { LLMContext } from '../services/llm'
 import { processImageAttachments } from '../services/llm/attachment'
@@ -80,10 +78,7 @@ export const messageCreateListener =
     }
 
     // Check if channel is whitelisted first
-    const channelWhitelisted = await isChannelWhitelisted(
-      msg.channelId,
-      msg.guildId
-    )
+    const channelWhitelisted = await isChannelWhitelisted(msg.channelId)
     if (!channelWhitelisted) return
 
     // Check if bot has permission to send messages in this channel
@@ -142,28 +137,36 @@ export const messageCreateListener =
     }
 
     // Record user message
-    const userMsgRecordRes = await discordBotApi.discord
-      .recordUserMessageEffect({
-        userId: msg.author.id,
-        guildId: msg.guildId,
-        intimacyIncrement: 1, // Default intimacy gain per message
-      })
-      .pipe(
-        Effect.tap((resp) =>
-          Effect.logInfo(
-            `Recording message - User: ${msg.author.username}(${msg.author.id}) from (Guild: ${msg.guildId})`
-          )
-        ),
-        Effect.catchAll((error) => {
-          if (error.statusCode === 402)
-            return Effect.succeed('not enough credit' as const)
-          return Effect.succeed('fail to record user message' as const)
-        }),
-        Runtime.runPromise(runtime)
+    const userMsgRecordRes = await ApiService.pipe(
+      Effect.flatMap(({ effectApi }) =>
+        effectApi.discord.recordUserMessage({
+          userId: msg.author.id,
+          // biome-ignore lint/style/noNonNullAssertion: Couldn't be null, ts is stupid here
+          guildId: msg.guildId!,
+          intimacyIncrement: 1,
+        })
       )
+    ).pipe(
+      Effect.tap((resp) =>
+        Effect.logInfo(
+          `Recording message - User: ${msg.author.username}(${msg.author.id}) from (Guild: ${msg.guildId})`
+        )
+      ),
+      Effect.mapError((error) => {
+        if (error.statusCode === 402) return 'not enough credit' as const
+        return 'fail to record user message' as const
+      }),
+      Effect.either,
+      Effect.provide(live),
+      Runtime.runPromise(runtime)
+    )
 
     const config = Effect.runSync(appConfig)
-    if (isProduction && userMsgRecordRes === 'not enough credit') {
+    if (
+      isProduction &&
+      userMsgRecordRes._tag === 'Left' &&
+      userMsgRecordRes.left === 'not enough credit'
+    ) {
       await safeReply(
         msg,
         `You've run out of message credits! Vote for the bot to get more credits.\n${config.voteUrl}`,
@@ -201,10 +204,9 @@ export const messageCreateListener =
      * Get intimacy level from the user record response
      * Intimacy level will be zero in development
      */
-    const intimacy =
-      typeof userMsgRecordRes === 'object' && userMsgRecordRes.data
-        ? userMsgRecordRes.data.userGuild.intimacy
-        : 0
+    const intimacy = Either.isRight(userMsgRecordRes)
+      ? userMsgRecordRes.right.data.userGuild.intimacy
+      : 0
 
     // Send LLM Response
     createLLMResponse(msg, intimacy)

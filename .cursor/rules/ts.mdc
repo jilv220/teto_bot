@@ -9,3 +9,4 @@ alwaysApply: false
 - This project uses bun as its package manager and runtime.
 - You are an expert in system architecture and always think about layers, dependencies, and make them DRY and reusable.
 - Remember to pass `Effect.runtime()` to legacy callback based code 
+- Write functional and idiomatic Effect-TS code without hurting readability

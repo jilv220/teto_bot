@@ -5,7 +5,8 @@ import {
   PermissionFlagsBits,
   type TextChannel,
 } from 'discord.js'
-import discordBotApi, { isApiError, isValidationError } from '../services/api'
+import { Effect, Either } from 'effect'
+import { ApiService, MainLive } from '../services'
 
 /**
  * Check if the user has the required permission to manage channels
@@ -73,20 +74,12 @@ export function canBotSendMessages(message: Message): boolean {
  * Check if channel is whitelisted
  */
 export async function isChannelWhitelisted(
-  channelId: string,
-  guildId: string
+  channelId: string
 ): Promise<boolean> {
-  try {
-    const result = await discordBotApi.channels.getChannel(channelId)
+  const result = await ApiService.pipe(
+    Effect.flatMap(({ effectApi }) => effectApi.channels.getChannel(channelId))
+  ).pipe(Effect.either, Effect.provide(MainLive), Effect.runPromise)
 
-    if (isApiError(result) || isValidationError(result)) {
-      return false
-    }
-
-    return result.data.channel.guildId === guildId
-  } catch (error) {
-    // TODO: Fix this later
-    // console.error('Error checking channel whitelist:', error)
-    return false
-  }
+  if (Either.isRight(result)) return true
+  return false
 }

@@ -1,6 +1,6 @@
 import { EmbedBuilder, type GuildMember, type User } from 'discord.js'
 import { TETO_COLOR_SV } from '.'
-import type { LeaderboardEntry } from '../services/api'
+import type { LeaderboardEntry } from '../services'
 
 /**
  * Build leaderboard title

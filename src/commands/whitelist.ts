@@ -4,12 +4,9 @@ import {
   MessageFlags,
   SlashCommandBuilder,
 } from 'discord.js'
-import {
-  discordBotApi,
-  getErrorMessage,
-  isApiError,
-  isValidationError,
-} from '../services/api'
+import { Effect, Either, Runtime } from 'effect'
+import { ApiService, MainLive } from '../services'
+import type { ApiError } from '../services/api/client'
 import { hasManageChannelsPermission } from '../utils/permissions'
 
 export const data = new SlashCommandBuilder()
@@ -26,27 +23,52 @@ export const data = new SlashCommandBuilder()
   )
 
 /**
- * Build appropriate error message based on error type
+ * Build appropriate error message based on ApiError
  */
-function buildErrorMessage(error: unknown, channelId: string): string {
-  if (isApiError(error) || isValidationError(error)) {
-    return `Failed to whitelist channel <#${channelId}>`
+function buildErrorMessage(error: ApiError, channelId: string): string {
+  // Check for "conflict" errors (409 status)
+  if (error.statusCode === 409) {
+    return `Channel <#${channelId}> is already whitelisted.`
   }
 
-  // Handle FetchError (network/HTTP errors)
-  if (error instanceof Error) {
-    const errorMessage = error.message
-
-    // Check for 409 Conflict status (indicates channel already exists)
-    if (errorMessage.includes('409') && errorMessage.includes('Conflict')) {
-      return `Channel <#${channelId}> is already whitelisted.`
-    }
-  }
-
-  return `Failed to whitelist channel <#${channelId}>. Please check the logs.`
+  return `Failed to whitelist channel <#${channelId}>: ${error.message}`
 }
 
-export async function execute(interaction: ChatInputCommandInteraction) {
+/**
+ * Effect-based whitelist operation
+ */
+const whitelistChannelEffect = (
+  channelId: string,
+  userId: string,
+  guildId: string
+): Effect.Effect<void, ApiError, ApiService> =>
+  Effect.gen(function* () {
+    const apiService = yield* ApiService
+    const effectApi = apiService.effectApi
+
+    // Ensure user-guild relationship exists
+    yield* effectApi.discord.ensureUserGuildExists({
+      userId,
+      guildId,
+    })
+
+    // Add channel to whitelist (create in database)
+    yield* effectApi.channels.createChannel({
+      channelId,
+      guildId,
+    })
+  }).pipe(
+    Effect.tapError((error) =>
+      Effect.logError(
+        `Failed to whitelist channel ${channelId}: ${error.message}`
+      )
+    )
+  )
+
+export async function execute(
+  runtime: Runtime.Runtime<never>,
+  interaction: ChatInputCommandInteraction
+) {
   // Check permissions
   if (!hasManageChannelsPermission(interaction)) {
     await interaction.reply({
@@ -66,37 +88,26 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     return
   }
 
-  try {
-    await discordBotApi.discord.ensureUserGuildExists({
-      userId: interaction.user.id,
-      guildId: interaction.guildId,
-    })
+  // Convert Effect to Either and run it
+  const program = whitelistChannelEffect(
+    channel.id,
+    interaction.user.id,
+    interaction.guildId
+  ).pipe(Effect.either, Effect.provide(MainLive))
+  const result = await Runtime.runPromise(runtime)(program)
 
-    // Attempt to whitelist the channel by creating it in the database
-    const result = await discordBotApi.channels.createChannel({
-      channelId: channel.id,
-      guildId: interaction.guildId,
-    })
-
-    if (isApiError(result) || isValidationError(result)) {
-      console.error(`Failed to whitelist channel ${channel.id}:`, result)
-
-      const errorMessage = buildErrorMessage(result, channel.id)
-      await interaction.reply({
-        content: errorMessage,
-        flags: MessageFlags.Ephemeral,
-      })
-    } else {
-      await interaction.reply({
-        content: `Channel <#${channel.id}> whitelisted successfully!`,
-        flags: MessageFlags.Ephemeral,
-      })
-    }
-  } catch (error) {
-    console.error(`Failed to whitelist channel ${channel.id}:`, error)
-    const errorMessage = buildErrorMessage(error, channel.id)
+  // Handle Either result
+  if (Either.isLeft(result)) {
+    // Error case
+    const errorMessage = buildErrorMessage(result.left, channel.id)
     await interaction.reply({
       content: errorMessage,
+      flags: MessageFlags.Ephemeral,
+    })
+  } else {
+    // Success case
+    await interaction.reply({
+      content: `Channel <#${channel.id}> whitelisted successfully!`,
       flags: MessageFlags.Ephemeral,
     })
   }

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { systemPromptApi } from '../services/api'
+import { discordOpsApi, systemPromptApi } from '../services'
 import {
   PromptVersionError,
   getLatestVersion,
@@ -105,12 +105,6 @@ async function updatePrompt(versionString?: string) {
       console.log(`  Characters: ${charCount}`)
       console.log(`  Words: ${wordCount}`)
       console.log(`  File: ${version.filePath}`)
-    } else {
-      // Handle API error response
-      const errorMessage =
-        'error' in response ? response.error.message : 'Unknown error occurred'
-      console.error('✗ Failed to update system prompt:', errorMessage)
-      process.exit(1)
     }
   } catch (error) {
     if (error instanceof PromptVersionError) {

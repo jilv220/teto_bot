@@ -4,12 +4,9 @@ import {
   MessageFlags,
   SlashCommandBuilder,
 } from 'discord.js'
-import {
-  discordBotApi,
-  getErrorMessage,
-  isApiError,
-  isValidationError,
-} from '../services/api'
+import { Effect, Either, Runtime } from 'effect'
+import { MainLive } from '../services'
+import { type ApiError, ApiService, effectApi } from '../services/api'
 import { hasManageChannelsPermission } from '../utils/permissions'
 
 export const data = new SlashCommandBuilder()
@@ -26,35 +23,50 @@ export const data = new SlashCommandBuilder()
   )
 
 /**
- * Build appropriate error message based on error type
+ * Build appropriate error message based on ApiError
  */
-function buildErrorMessage(error: unknown, channelId: string): string {
-  if (isApiError(error) || isValidationError(error)) {
-    // Check for specific error cases
-    const errorMessage = getErrorMessage(error)
-
-    // Check for "not found" errors
-    if (errorMessage.toLowerCase().includes('not found')) {
-      return `Channel <#${channelId}> was not found in the whitelist.`
-    }
-
-    return `Failed to blacklist channel <#${channelId}>`
+function buildErrorMessage(error: ApiError, channelId: string): string {
+  if (error.statusCode === 404) {
+    return `Channel <#${channelId}> was not found in the whitelist.`
   }
 
-  // Handle FetchError (network/HTTP errors)
-  if (error instanceof Error) {
-    const errorMessage = error.message
-
-    // Check for 404 Not Found status (indicates channel not in whitelist)
-    if (errorMessage.includes('404') && errorMessage.includes('Not Found')) {
-      return `Channel <#${channelId}> was not found in the whitelist.`
-    }
-  }
-
-  return `Failed to blacklist channel <#${channelId}>. Please check the logs.`
+  return `Failed to blacklist channel <#${channelId}>: ${error.message}`
 }
 
-export async function execute(interaction: ChatInputCommandInteraction) {
+/**
+ * Effect-based blacklist operation
+ */
+const blacklistChannelEffect = (
+  channelId: string,
+  userId: string,
+  guildId: string
+) =>
+  Effect.gen(function* () {
+    const apiService = yield* ApiService
+    const effectApi = apiService.effectApi
+
+    // Ensure user-guild relationship exists
+    yield* effectApi.discord.ensureUserGuildExists({
+      userId,
+      guildId,
+    })
+
+    // Remove channel from whitelist (delete from database)
+    const result = yield* effectApi.channels.deleteChannel(channelId)
+
+    return result
+  }).pipe(
+    Effect.tapError((error) =>
+      Effect.logError(
+        `Failed to blacklist channel ${channelId}: ${error.message}`
+      )
+    )
+  )
+
+export async function execute(
+  runtime: Runtime.Runtime<never>,
+  interaction: ChatInputCommandInteraction
+) {
   // Check permissions
   if (!hasManageChannelsPermission(interaction)) {
     await interaction.reply({
@@ -74,34 +86,26 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     return
   }
 
-  try {
-    await discordBotApi.discord.ensureUserGuildExists({
-      userId: interaction.user.id,
-      guildId: interaction.guildId,
-    })
+  // Convert Effect to Either and run it
+  const program = blacklistChannelEffect(
+    channel.id,
+    interaction.user.id,
+    interaction.guildId
+  ).pipe(Effect.either, Effect.provide(MainLive))
+  const result = await Runtime.runPromise(runtime)(program)
 
-    // Attempt to blacklist the channel by removing it from the database
-    const result = await discordBotApi.channels.deleteChannel(channel.id)
-
-    if (isApiError(result) || isValidationError(result)) {
-      console.error(`Failed to blacklist channel ${channel.id}:`, result)
-
-      const errorMessage = buildErrorMessage(result, channel.id)
-      await interaction.reply({
-        content: errorMessage,
-        flags: MessageFlags.Ephemeral,
-      })
-    } else {
-      await interaction.reply({
-        content: `Channel <#${channel.id}> has been removed from the whitelist.`,
-        flags: MessageFlags.Ephemeral,
-      })
-    }
-  } catch (error) {
-    console.error(`Failed to blacklist channel ${channel.id}:`, error)
-    const errorMessage = buildErrorMessage(error, channel.id)
+  // Handle Either result
+  if (Either.isLeft(result)) {
+    // Error case
+    const errorMessage = buildErrorMessage(result.left, channel.id)
     await interaction.reply({
       content: errorMessage,
+      flags: MessageFlags.Ephemeral,
+    })
+  } else {
+    // Success case
+    await interaction.reply({
+      content: `Channel <#${channel.id}> has been removed from the whitelist.`,
       flags: MessageFlags.Ephemeral,
     })
   }

@@ -1,4 +1,5 @@
 import { Layer } from 'effect'
+import { ApiServiceLive } from './api'
 import { ChannelRateLimiterLive } from './channelRateLimiter'
 import { ClientLive } from './client'
 import {
@@ -21,5 +22,9 @@ export const LLMLayer = LLMLive.pipe(
 export const MainLive = Layer.mergeAll(
   ClientLive,
   LLMLayer,
-  ChannelRateLimiterLive
+  ChannelRateLimiterLive,
+  ApiServiceLive
 )
+
+// Re-export API service components
+export * from './api'

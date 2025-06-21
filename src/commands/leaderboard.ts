@@ -5,13 +5,10 @@ import {
   SlashCommandBuilder,
   type User,
 } from 'discord.js'
+import { Effect, Either, Runtime } from 'effect'
 import { buildLeaderboardEmbed } from '../embeds/leaderboard'
-import {
-  type LeaderboardEntry,
-  discordBotApi,
-  isApiError,
-  isValidationError,
-} from '../services/api'
+import { ApiService, MainLive } from '../services'
+import type { ApiError, LeaderboardEntry } from '../services/api/client'
 import { isChannelWhitelisted } from '../utils/permissions'
 
 const API_TIMEOUT = 2000
@@ -137,47 +134,70 @@ async function buildAndSendLeaderboard(
 }
 
 /**
- * Handle leaderboard command interaction
+ * Effect-based leaderboard operation
  */
-async function handleLeaderboard(
-  interaction: ChatInputCommandInteraction,
+const fetchLeaderboardEffect = (
   guildId: string
-): Promise<void> {
-  try {
-    const result = await discordBotApi.leaderboard.getIntimacyLeaderboard({
+): Effect.Effect<LeaderboardEntry[], ApiError, ApiService> =>
+  Effect.gen(function* () {
+    const apiService = yield* ApiService
+    const effectApi = apiService.effectApi
+
+    const result = yield* effectApi.leaderboard.getIntimacyLeaderboard({
       guildId,
       limit: 10,
     })
 
-    if (isApiError(result) || isValidationError(result)) {
-      console.error(`Failed to fetch leaderboard for guild ${guildId}:`, result)
-      await interaction.reply({
-        content: 'Failed to retrieve the leaderboard. Please try again later.',
-        flags: MessageFlags.Ephemeral,
-      })
-      return
-    }
+    return result.data.leaderboard
+  }).pipe(
+    Effect.tapError((error) =>
+      Effect.logError(
+        `Failed to fetch leaderboard for guild ${guildId}: ${error.message}`
+      )
+    )
+  )
 
-    const entries = result.data.leaderboard
+/**
+ * Handle leaderboard command interaction using Effect
+ */
+async function handleLeaderboard(
+  runtime: Runtime.Runtime<never>,
+  interaction: ChatInputCommandInteraction,
+  guildId: string
+): Promise<void> {
+  // Convert Effect to Either and run it
+  const program = fetchLeaderboardEffect(guildId).pipe(
+    Effect.either,
+    Effect.provide(MainLive)
+  )
+  const result = await Runtime.runPromise(runtime)(program)
 
-    if (entries.length === 0) {
-      await interaction.reply({
-        content: 'No one has earned intimacy with Teto in this guild yet!',
-      })
-      return
-    }
-
-    await buildAndSendLeaderboard(interaction, entries)
-  } catch (error) {
-    console.error(`Failed to fetch leaderboard for guild ${guildId}:`, error)
+  // Handle Either result
+  if (Either.isLeft(result)) {
+    // Error case
     await interaction.reply({
       content: 'Failed to retrieve the leaderboard. Please try again later.',
       flags: MessageFlags.Ephemeral,
     })
+    return
   }
+
+  const entries = result.right
+
+  if (entries.length === 0) {
+    await interaction.reply({
+      content: 'No one has earned intimacy with Teto in this guild yet!',
+    })
+    return
+  }
+
+  await buildAndSendLeaderboard(interaction, entries)
 }
 
-export async function execute(interaction: ChatInputCommandInteraction) {
+export async function execute(
+  runtime: Runtime.Runtime<never>,
+  interaction: ChatInputCommandInteraction
+) {
   const guildId = interaction.guildId
   const channelId = interaction.channelId
 
@@ -190,7 +210,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   }
 
   // Check if channel is whitelisted
-  const isWhitelisted = await isChannelWhitelisted(channelId, guildId)
+  const isWhitelisted = await isChannelWhitelisted(channelId)
   if (!isWhitelisted) {
     await interaction.reply({
       content: 'This command can only be used in whitelisted channels.',
@@ -199,5 +219,5 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     return
   }
 
-  await handleLeaderboard(interaction, guildId)
+  await handleLeaderboard(runtime, interaction, guildId)
 }

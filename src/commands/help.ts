@@ -3,6 +3,7 @@ import {
   MessageFlags,
   SlashCommandBuilder,
 } from 'discord.js'
+import type { Runtime } from 'effect'
 import { type CommandInfo, buildHelpEmbed } from '../embeds/help'
 
 export const data = new SlashCommandBuilder()
@@ -46,7 +47,10 @@ function getAvailableCommands(
   return commands.sort((a, b) => a.name.localeCompare(b.name))
 }
 
-export async function execute(interaction: ChatInputCommandInteraction) {
+export async function execute(
+  runtime: Runtime.Runtime<never>,
+  interaction: ChatInputCommandInteraction
+) {
   try {
     const commands = getAvailableCommands(interaction)
     const helpEmbed = buildHelpEmbed(commands)

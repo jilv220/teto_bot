@@ -1,20 +1,11 @@
 import type { Client } from 'discord.js'
 import { Duration, Effect, Fiber, Schedule, pipe } from 'effect'
-import { discordBotApi, isApiError, isValidationError } from './api'
+import { MainLive } from '.'
+import { ApiError, ApiService } from '../services/api'
 
 // Define error types for better error handling
 export class GuildCleanupError extends Error {
   readonly _tag = 'GuildCleanupError'
-  constructor(
-    readonly message: string,
-    readonly cause?: unknown
-  ) {
-    super(message)
-  }
-}
-
-export class GuildFetchError extends Error {
-  readonly _tag = 'GuildFetchError'
   constructor(
     readonly message: string,
     readonly cause?: unknown
@@ -45,19 +36,10 @@ export interface CleanupResult {
  */
 const fetchGuildsFromDatabase = Effect.gen(function* () {
   yield* Effect.logInfo('Fetching guilds from database...')
+  const apiService = yield* ApiService
+  const effectApi = apiService.effectApi
 
-  const dbGuildsResponse = yield* Effect.tryPromise({
-    try: () => discordBotApi.guilds.getGuilds(),
-    catch: (error) =>
-      new GuildFetchError('Failed to fetch guilds from database', error),
-  })
-
-  if (isApiError(dbGuildsResponse) || isValidationError(dbGuildsResponse)) {
-    yield* Effect.logError('API error when fetching guilds', dbGuildsResponse)
-    return yield* Effect.fail(
-      new GuildFetchError('Invalid response from database')
-    )
-  }
+  const dbGuildsResponse = yield* effectApi.guilds.getGuilds()
 
   yield* Effect.logInfo(
     `Fetched ${dbGuildsResponse.data.guilds.length} guilds from database`
@@ -72,10 +54,11 @@ const deleteOrphanedGuild = (guildId: string) =>
   Effect.gen(function* () {
     yield* Effect.logInfo(`Attempting to delete orphaned guild: ${guildId}`)
 
-    const deleteResponse =
-      yield* discordBotApi.guilds.deleteGuildEffect(guildId)
-
+    const apiService = yield* ApiService
+    const effectApi = apiService.effectApi
+    const deleteResponse = yield* effectApi.guilds.deleteGuild(guildId)
     yield* Effect.logInfo(`Successfully deleted orphaned guild: ${guildId}`)
+
     return guildId
   }).pipe(
     Effect.retry(
@@ -149,8 +132,8 @@ export const cleanupOrphanedGuilds = (client: Client) =>
         successful.push(result.right)
       } else {
         const error = result.left
-        if (error instanceof GuildDeleteError) {
-          failed.push(error.guildId)
+        if (error instanceof ApiError) {
+          failed.push(error.message)
         }
       }
     }
@@ -212,15 +195,6 @@ export const startGuildCleanupTask = (client: Client) =>
       Effect.schedule(Schedule.fixed(Duration.hours(2)))
     )
   })
-
-/**
- * Legacy cleanup function for backward compatibility
- */
-export async function cleanupOrphanedGuildsLegacy(
-  client: Client
-): Promise<CleanupResult> {
-  return Effect.runPromise(cleanupOrphanedGuilds(client))
-}
 
 /**
  * Effect-based cleanup with comprehensive error handling and logging
