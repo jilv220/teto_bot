@@ -158,12 +158,12 @@ const make = (config: RateLimitConfig) =>
 
     const startCleanup = () =>
       Effect.gen(function* () {
-        yield* Effect.logInfo('Starting rate limiter cleanup task...')
+        yield* Effect.logInfo('Starting rate limiter cleanup...')
 
         const schedule = Schedule.fixed(
           `${rateLimitConfig.cleanupIntervalMs} millis`
         )
-        yield* cleanup.pipe(Effect.repeat(schedule))
+        yield* cleanup.pipe(Effect.schedule(schedule))
       })
 
     return ChannelRateLimiter.of({

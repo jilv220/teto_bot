@@ -207,8 +207,9 @@ export const startGuildCleanupTask = (client: Client) =>
     yield* Effect.logInfo('Starting guild cleanup task (runs every 2 hours)')
 
     // Run the cleanup task on a schedule indefinitely
+    // Use schedule instead of repeat to skip first execution
     yield* scheduleCleanupTask(client).pipe(
-      Effect.repeat(Schedule.fixed(Duration.hours(2)))
+      Effect.schedule(Schedule.fixed(Duration.hours(2)))
     )
   })
 
