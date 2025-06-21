@@ -85,8 +85,8 @@ const program = Effect.scoped(
         // Set up Discord client event listeners
         client
           .on('ready', ready(runtime))
-          .on('guildCreate', guildCreateListener(runtime))
-          .on('guildDelete', guildDeleteListener(runtime))
+          .on('guildCreate', guildCreateListener(runtime, mainLive))
+          .on('guildDelete', guildDeleteListener(runtime, mainLive))
           .on('messageCreate', messageCreateListener(runtime, mainLive))
           .on('interactionCreate', interactionCreateListener(runtime, mainLive))
 

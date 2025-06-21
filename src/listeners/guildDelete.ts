@@ -1,15 +1,19 @@
 import type { Guild } from 'discord.js'
 import { Effect, Runtime } from 'effect'
-import type { MainLive } from '../services'
-import { guildApi } from '../services/api'
+import { ApiService, type MainLive } from '../services'
 
 export const guildDeleteListener =
-  (runtime: Runtime.Runtime<never>) => async (guild: Guild) => {
-    await Runtime.runPromise(runtime)(
-      guildApi
-        .deleteGuildEffect(guild.id)
-        .pipe(
-          Effect.tap(({ data }) => Effect.logInfo(`Guild ${guild.id} left us!`))
-        )
-    )
+  (runtime: Runtime.Runtime<never>, live: typeof MainLive) =>
+  async (guild: Guild) => {
+    const program = ApiService.pipe(
+      Effect.flatMap(({ effectApi }) => {
+        return effectApi.guilds.deleteGuild(guild.id)
+      }),
+      Effect.tap(() => Effect.logInfo(`Guild ${guild.id} left us!`)),
+      Effect.tapError((error) =>
+        Effect.logError(`Failed to delete guild ${guild.id}: ${error}`)
+      )
+    ).pipe(Effect.either)
+
+    await Runtime.runPromise(runtime)(program.pipe(Effect.provide(live)))
   }

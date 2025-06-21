@@ -1,9 +1,10 @@
 import type { Guild } from 'discord.js'
 import { Duration, Effect, Runtime, Schedule } from 'effect'
-import { ApiService, MainLive } from '../services'
+import { ApiService, type MainLive } from '../services'
 
 export const guildCreateListener =
-  (runtime: Runtime.Runtime<never>) => async (guild: Guild) => {
+  (runtime: Runtime.Runtime<never>, live: typeof MainLive) =>
+  async (guild: Guild) => {
     const program = ApiService.pipe(
       Effect.flatMap(({ effectApi }) => {
         return effectApi.guilds.createGuild({ guildId: guild.id })
@@ -24,5 +25,5 @@ export const guildCreateListener =
       })
     ).pipe(Effect.either)
 
-    program.pipe(Effect.provide(MainLive), Runtime.runPromise(runtime))
+    program.pipe(Effect.provide(live), Runtime.runPromise(runtime))
   }
