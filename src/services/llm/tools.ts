@@ -15,6 +15,8 @@ export const getLyricsTool = new DynamicStructuredTool({
     'Get the lyrics for a specific song by providing the song title and artist name',
   schema: GetLyricsSchema,
   func: async ({ song_title, artist }) => {
+    console.log(`[get_lyrics] Called with: ${song_title} by ${artist}`)
+
     return Effect.gen(function* () {
       // Define response type
       interface LyricsResult {
@@ -42,30 +44,32 @@ export const getLyricsTool = new DynamicStructuredTool({
           artist: cachedResult.data.lyrics.artist,
           source: 'cache',
         }
-      } else {
-        // If not found in cache, return message that lyrics service is not available
-        response = {
-          lyrics: `Lyrics for "${song_title}" by ${artist} are not available in our database. External lyrics services are currently disabled.`,
-          title: song_title,
-          artist: artist,
-          source: 'unavailable',
-        }
+        console.log('[get_lyrics] Found lyrics in cache for: ' + response.title)
+        return (
+          'Found lyrics for "' +
+          response.title +
+          '" by ' +
+          response.artist +
+          ':\n\n' +
+          response.lyrics
+        )
       }
 
-      return JSON.stringify({
-        success: true,
-        data: response,
-        message: `Found lyrics for "${song_title}" by ${artist}`,
-      })
+      // If not found in cache, return message that lyrics service is not available
+      const unavailableMessage =
+        'Lyrics for "' +
+        song_title +
+        '" by ' +
+        artist +
+        ' are not available in our database. External lyrics services are currently disabled.'
+      console.log('[get_lyrics] No lyrics found, returning unavailable message')
+      return unavailableMessage
     }).pipe(
       Effect.catchAll((error: unknown) =>
         Effect.succeed(
-          JSON.stringify({
-            success: false,
-            error:
-              error instanceof Error ? error.message : 'Unknown error occurred',
-            message: `Could not find lyrics for "${song_title}" by ${artist}`,
-          })
+          `Could not find lyrics for "${song_title}" by ${artist}. Error: ${
+            error instanceof Error ? error.message : 'Unknown error occurred'
+          }`
         )
       ),
       Effect.runPromise

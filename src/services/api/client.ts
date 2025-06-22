@@ -236,6 +236,29 @@ export interface WordOfTheDayResponse {
   date: string
 }
 
+export interface WordResponse {
+  response: string
+  updatedAt: string
+}
+
+export interface UpdateWordResponseRequest {
+  response: string
+}
+
+export interface WordResponseResponse {
+  data: WordResponse
+}
+
+export interface UpdateWordResponseResponse {
+  data: WordResponse
+}
+
+export interface DeleteWordResponseResponse {
+  data: {
+    message: string
+  }
+}
+
 // =====================
 // API SERVICE - PHASE 2 COMPLETE
 // =====================
@@ -660,6 +683,37 @@ export const wordOfTheDayApi = {
   },
 }
 
+// Word Response API
+export const wordResponseApi = {
+  /**
+   * Get the current LLM word response
+   */
+  async getWordResponse(): Promise<WordResponseResponse> {
+    return api<WordResponseResponse>('/word-response')
+  },
+
+  /**
+   * Update the LLM word response
+   */
+  async updateWordResponse(
+    updateData: UpdateWordResponseRequest
+  ): Promise<UpdateWordResponseResponse> {
+    return api<UpdateWordResponseResponse>('/word-response', {
+      method: 'POST',
+      body: updateData,
+    })
+  },
+
+  /**
+   * Delete the current LLM word response
+   */
+  async deleteWordResponse(): Promise<DeleteWordResponseResponse> {
+    return api<DeleteWordResponseResponse>('/word-response', {
+      method: 'DELETE',
+    })
+  },
+}
+
 // =====================
 // ERROR HANDLING & UTILITIES
 // =====================
@@ -1025,6 +1079,24 @@ export const wordOfTheDayEffectApi = {
     ),
 }
 
+export const wordResponseEffectApi = {
+  getWordResponse: () =>
+    makeApiEffect(
+      () => wordResponseApi.getWordResponse(),
+      'wordResponse.getWordResponse'
+    ),
+  updateWordResponse: (updateData: UpdateWordResponseRequest) =>
+    makeApiEffect(
+      () => wordResponseApi.updateWordResponse(updateData),
+      'wordResponse.updateWordResponse'
+    ),
+  deleteWordResponse: () =>
+    makeApiEffect(
+      () => wordResponseApi.deleteWordResponse(),
+      'wordResponse.deleteWordResponse'
+    ),
+}
+
 /**
  * Effect-based API modules with standardized error handling
  *
@@ -1042,6 +1114,7 @@ export const effectApi = {
   discord: discordOpsEffectApi,
   leaderboard: leaderboardEffectApi,
   wordOfTheDay: wordOfTheDayEffectApi,
+  wordResponse: wordResponseEffectApi,
 }
 
 // =====================
@@ -1065,6 +1138,7 @@ export const promiseApi = {
   discord: discordOpsApi,
   leaderboard: leaderboardApi,
   wordOfTheDay: wordOfTheDayApi,
+  wordResponse: wordResponseApi,
 }
 
 /**

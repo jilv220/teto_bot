@@ -12,6 +12,7 @@ import {
   START,
   StateGraph,
 } from '@langchain/langgraph'
+import { ToolNode } from '@langchain/langgraph/prebuilt'
 import { Context, Effect, Layer } from 'effect'
 import { v4 as uuidv4 } from 'uuid'
 import { appConfig } from '../config'
@@ -25,6 +26,7 @@ import {
   buildSummaryMessage,
   systemPromptEffect,
 } from './prompt'
+import { tools } from './tools'
 
 export class LLMContext extends Context.Tag('LLMContext')<
   LLMContext,
@@ -108,6 +110,9 @@ export const LLMLive = Layer.effect(
     const conversation = createConversation(conversationModel)
     const vision = createConversation(visionModel)
 
+    // Create tool node for executing tools
+    const toolNode = new ToolNode(tools)
+
     // Summarization node
     const summarizeConversation = async (
       state: typeof GraphAnnotation.State
@@ -179,11 +184,22 @@ export const LLMLive = Layer.effect(
       return state.hasImages ? 'vision' : 'conversation'
     }
 
-    // Determine whether to continue or summarize
-    const shouldContinue = (
+    // Unified routing function for conversation/vision nodes
+    const routeFromModel = (
       state: typeof GraphAnnotation.State
-    ): 'summarize_conversation' | typeof END => {
+    ): 'tools' | 'summarize_conversation' | typeof END => {
       const messages = state.messages
+      const lastMessage = messages[messages.length - 1]
+
+      // Check if the last message has tool calls - if so, execute tools
+      if (
+        lastMessage &&
+        'tool_calls' in lastMessage &&
+        Array.isArray(lastMessage.tool_calls) &&
+        lastMessage.tool_calls.length > 0
+      ) {
+        return 'tools'
+      }
 
       // If there are more than summarizationThreshold messages, summarize the conversation
       if (messages.length > config.summarizationThreshold) {
@@ -194,17 +210,26 @@ export const LLMLive = Layer.effect(
       return END
     }
 
-    // Create the graph with vision support
+    // Determine which model to route back to after tool execution
+    const routeAfterTools = (
+      state: typeof GraphAnnotation.State
+    ): 'conversation' | 'vision' => {
+      return state.hasImages ? 'vision' : 'conversation'
+    }
+
+    // Create the graph with vision support and tool execution
     const workflow = new StateGraph(GraphAnnotation)
       .addNode('conversation', conversation)
       .addNode('vision', vision)
+      .addNode('tools', toolNode)
       .addNode('summarize_conversation', summarizeConversation)
       .addNode('delete_messages', deleteMessages)
       .addNode('router', passThrough)
       .addConditionalEdges(START, checkConversationGap)
       .addConditionalEdges('router', routeToModel)
-      .addConditionalEdges('conversation', shouldContinue)
-      .addConditionalEdges('vision', shouldContinue)
+      .addConditionalEdges('conversation', routeFromModel)
+      .addConditionalEdges('vision', routeFromModel)
+      .addConditionalEdges('tools', routeAfterTools)
       .addEdge('summarize_conversation', END)
       .addEdge('delete_messages', 'router')
 

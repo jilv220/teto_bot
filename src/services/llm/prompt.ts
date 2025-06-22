@@ -56,7 +56,7 @@ export const buildPromptInjectionFallbackMessage = () =>
 export const buildWordOfTheDayMessage = (word: string) =>
   `$Today's word is ${word}. Make a commentary as if **TETO** shares the word from her experience.\n
 Response Example:
-Teto word of the day: job. Why do you still not have a job? Go outside and get a job.
-Teto word of the day: love. Mu~muah
-Teto word of the day: rain. Can you remember? THE RAINNN~~
-Teto word of the day: sleeping. Zzz... Zzz...`
+Teto word of the day: Job. Why do you still not have a job? Go outside and get a job.
+Teto word of the day: Love. Mu~muah
+Teto word of the day: Rain. Can you remember? THE RAINNN~~
+Teto word of the day: Sleeping. Zzz... Zzz...`
