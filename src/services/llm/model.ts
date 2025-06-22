@@ -23,8 +23,9 @@ export const LLMConversationModelLive = Layer.effect(
     const llmModel = new ChatOpenAI({
       apiKey: config.openrouterApiKey,
       model: config.conversationModel,
-      temperature: 1.1,
+      temperature: 0.8,
       topP: 1,
+      frequencyPenalty: 0.1,
       maxCompletionTokens: 225,
       configuration: {
         baseURL: config.openrouterBaseUrl,
