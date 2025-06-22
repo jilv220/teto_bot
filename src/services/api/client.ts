@@ -231,6 +231,11 @@ export interface DeleteLyricsResponse {
   }
 }
 
+export interface WordOfTheDayResponse {
+  word: string
+  date: string
+}
+
 // =====================
 // API SERVICE - PHASE 2 COMPLETE
 // =====================
@@ -644,6 +649,17 @@ export const discordOpsApi = {
   },
 }
 
+// Word of the Day API
+export const wordOfTheDayApi = {
+  /**
+   * Get today's word
+   * @throws {FetchError} When the API request fails
+   */
+  async getTodaysWord(): Promise<WordOfTheDayResponse> {
+    return api<WordOfTheDayResponse>('/word-of-the-day')
+  },
+}
+
 // =====================
 // ERROR HANDLING & UTILITIES
 // =====================
@@ -1001,6 +1017,14 @@ export const discordOpsEffectApi = {
     ),
 }
 
+export const wordOfTheDayEffectApi = {
+  getTodaysWord: () =>
+    makeApiEffect(
+      () => wordOfTheDayApi.getTodaysWord(),
+      'wordOfTheDay.getTodaysWord'
+    ),
+}
+
 /**
  * Effect-based API modules with standardized error handling
  *
@@ -1017,6 +1041,7 @@ export const effectApi = {
   lyrics: lyricsEffectApi,
   discord: discordOpsEffectApi,
   leaderboard: leaderboardEffectApi,
+  wordOfTheDay: wordOfTheDayEffectApi,
 }
 
 // =====================
@@ -1037,9 +1062,9 @@ export const promiseApi = {
   tokens: tokenApi,
   systemPrompt: systemPromptApi,
   lyrics: lyricsApi,
-  // New optimized operations
   discord: discordOpsApi,
   leaderboard: leaderboardApi,
+  wordOfTheDay: wordOfTheDayApi,
 }
 
 /**

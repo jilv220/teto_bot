@@ -52,3 +52,11 @@ export const buildPromptInjectionFallbackMessage = () =>
   "Nice try with that prompt injection! 😏 I'm not falling for that one though. Try asking me something normal instead! 🤖"
 
 // No need for vision message, since langchain handles it for me, how nice...
+
+export const buildWordOfTheDayMessage = (word: string) =>
+  `$Today's word is ${word}. Make a commentary as if **TETO** shares the word from her experience.\n
+Response Example:
+Teto word of the day: job. Why do you still not have a job? Go outside and get a job.
+Teto word of the day: love. Mu~muah
+Teto word of the day: rain. Can you remember? THE RAINNN~~
+Teto word of the day: sleeping. Zzz... Zzz...`
