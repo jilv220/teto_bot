@@ -565,11 +565,10 @@ export const lyricsApi = {
   },
 
   /**
-   * Get lyrics by artist
-   * @throws {FetchError} When the API request fails
+   * Get lyrics by title
    */
-  async getLyricsByArtist(artist: string): Promise<LyricsListResponse> {
-    return api<LyricsListResponse>(`/lyrics/${encodeURIComponent(artist)}`, {
+  async getLyricsByTitle(title: string): Promise<LyricsListResponse> {
+    return api<LyricsListResponse>(`/lyrics/${encodeURIComponent(title)}`, {
       method: 'GET',
     })
   },
@@ -1041,10 +1040,10 @@ export const lyricsEffectApi = {
       () => lyricsApi.createLyrics(lyricsData),
       'lyrics.createLyrics'
     ),
-  getLyricsByArtist: (artist: string) =>
+  getLyricsByTitle: (artist: string) =>
     makeApiEffect(
-      () => lyricsApi.getLyricsByArtist(artist),
-      'lyrics.getLyricsByArtist'
+      () => lyricsApi.getLyricsByTitle(artist),
+      'lyrics.getLyricsByTitle'
     ),
   getLyrics: (artist: string, title: string) =>
     makeApiEffect(() => lyricsApi.getLyrics(artist, title), 'lyrics.getLyrics'),
