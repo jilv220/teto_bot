@@ -232,8 +232,10 @@ export interface DeleteLyricsResponse {
 }
 
 export interface WordOfTheDayResponse {
-  word: string
-  date: string
+  data: {
+    word: string
+    date: string
+  }
 }
 
 export interface WordResponse {

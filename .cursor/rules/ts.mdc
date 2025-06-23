@@ -10,3 +10,4 @@ alwaysApply: false
 - You are an expert in system architecture and always think about layers, dependencies, and make them DRY and reusable.
 - Remember to pass `Effect.runtime()` to legacy callback based code 
 - Write functional and idiomatic Effect-TS code without hurting readability
+- If struggling with functional programming, just use Effect.gen and write imperatively, avoid try...catch...

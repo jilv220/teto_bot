@@ -23,6 +23,7 @@ export const LLMLayer = LLMLive.pipe(
 export const MainLive = Layer.mergeAll(
   ClientLive,
   LLMLayer,
+  LLMConversationModelLive,
   ChannelRateLimiterLive,
   ApiServiceLive,
   ChannelServiceLive

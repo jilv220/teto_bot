@@ -1,6 +1,6 @@
 import { ChatPromptTemplate } from '@langchain/core/prompts'
 import { Effect, pipe } from 'effect'
-import { OfetchError, systemPromptApi } from '../api'
+import { ApiError, OfetchError, systemPromptApi } from '../api'
 import { appConfig } from '../config'
 
 const addWordLimit = (prompt: string) => {
@@ -18,7 +18,7 @@ export const systemPromptEffect = Effect.gen(function* () {
 
   if (!response.prompt) {
     return yield* Effect.fail(
-      new OfetchError({
+      new ApiError({
         message: 'no system prompt found',
         statusCode: 404,
       })
