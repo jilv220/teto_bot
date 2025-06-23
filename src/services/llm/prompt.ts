@@ -26,6 +26,7 @@ export const systemPromptEffect = Effect.gen(function* () {
   }
 
   const refinedPrompt = pipe(response.prompt, addWordLimit, addUserContext)
+
   return ChatPromptTemplate.fromMessages([
     ['system', refinedPrompt],
     ['placeholder', '{messages}'],

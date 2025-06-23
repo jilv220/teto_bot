@@ -152,10 +152,23 @@ export const LLMLive = Layer.effect(
       }
     }
 
-    // Delete all messages node
-    const deleteMessages = () => ({
-      messages: [new RemoveMessage({ id: REMOVE_ALL_MESSAGES })],
-    })
+    // Delete old messages but preserve current user message
+    const deleteMessages = (state: typeof GraphAnnotation.State) => {
+      // Keep only the most recent message (which should be the current user message)
+      const currentMessage = state.messages[state.messages.length - 1]
+
+      // Create remove messages for all but the current one
+      const messagesToDelete = state.messages
+        .slice(0, -1) // All except the last one
+        .filter((m) => m.id)
+        .map((m) => new RemoveMessage({ id: m.id as string }))
+
+      return {
+        messages: messagesToDelete,
+        summary: '', // Clear summary too when starting fresh
+        lastMessageTimestamp: Date.now(), // Update timestamp
+      }
+    }
 
     // Check if there's a large gap indicating a new topic
     const checkConversationGap = (
@@ -166,11 +179,11 @@ export const LLMLive = Layer.effect(
 
       // If gap is larger than configured threshold (e.g., 30 minutes), treat as new topic
       const gapThresholdMs = config.conversationGapThreshold
+      const gap = currentTime - lastMessageTimestamp
 
-      if (currentTime - lastMessageTimestamp > gapThresholdMs) {
+      if (gap > gapThresholdMs) {
         return 'delete_messages'
       }
-
       return 'router'
     }
 

@@ -44,6 +44,7 @@ const createLLMResponse = (msg: Message<boolean>, intimacy: number) =>
 
     // One thread per channel basically
     const config = { configurable: { thread_id: msg.channelId } }
+
     const result = yield* Effect.promise(() =>
       llm.invoke(
         {
