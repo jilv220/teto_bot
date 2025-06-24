@@ -154,9 +154,6 @@ export const LLMLive = Layer.effect(
 
     // Delete old messages but preserve current user message
     const deleteMessages = (state: typeof GraphAnnotation.State) => {
-      // Keep only the most recent message (which should be the current user message)
-      const currentMessage = state.messages[state.messages.length - 1]
-
       // Create remove messages for all but the current one
       const messagesToDelete = state.messages
         .slice(0, -1) // All except the last one

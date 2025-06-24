@@ -27,7 +27,8 @@ export const appConfig = Effect.gen(function* () {
     voteUrl: 'https://top.gg/bot/1374166544149512313/vote',
     maxWords: 150,
     summarizationThreshold: 16,
-    recentMessagesKeep: 5,
+    // Minimum is 1, which is the most recent user message
+    recentMessagesKeep: 1,
     conversationGapThreshold: 1000 * 60 * 60 * 2,
     maxRequests: 8,
     windowMs: 1000 * 60,
