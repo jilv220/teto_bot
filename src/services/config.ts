@@ -26,10 +26,10 @@ export const appConfig = Effect.gen(function* () {
     devGuildId: '1374179000192339979',
     voteUrl: 'https://top.gg/bot/1374166544149512313/vote',
     maxWords: 150,
-    summarizationThreshold: 22,
+    summarizationThreshold: 16,
     recentMessagesKeep: 5,
     conversationGapThreshold: 1000 * 60 * 60 * 2,
-    maxRequests: 16,
+    maxRequests: 8,
     windowMs: 1000 * 60,
     cleanupIntervalMs: 1000 * 60 * 5,
   }
