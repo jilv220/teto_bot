@@ -28,7 +28,6 @@ export const ClientLive = Layer.effect(
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMembers,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.GuildPresences,
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.DirectMessages,
       ],
