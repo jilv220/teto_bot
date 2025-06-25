@@ -1,4 +1,4 @@
-import { EmbedBuilder, type GuildMember, type User } from 'discord.js'
+import { EmbedBuilder, type User } from 'discord.js'
 import { TETO_COLOR_SV } from '.'
 import type { LeaderboardEntry } from '../services'
 
@@ -10,20 +10,10 @@ function buildLeaderboardTitle(): string {
 }
 
 /**
- * Get display name for a user, prioritizing nickname -> global name -> username
+ * Get display name for a user, using global name or username
+ * Refactored to work without guild member data (no nicknames available)
  */
-function getDisplayName(
-  userId: string,
-  membersMap: Map<string, GuildMember>,
-  usersMap: Map<string, User>
-): string {
-  // Try nickname from guild member first
-  const member = membersMap.get(userId)
-  if (member?.nickname) {
-    return member.nickname
-  }
-
-  // Fall back to user global name or username
+function getDisplayName(userId: string, usersMap: Map<string, User>): string {
   const user = usersMap.get(userId)
   if (user) {
     return user.globalName || user.username || `User#${userId}`
@@ -37,14 +27,13 @@ function getDisplayName(
  */
 export function buildLeaderboardEmbed(
   entries: LeaderboardEntry[],
-  membersMap: Map<string, GuildMember>,
   usersMap: Map<string, User>,
   guildName?: string
 ): EmbedBuilder {
   const leaderboardEntries = entries
     .map((entry, index) => {
       const rank = index + 1
-      const displayName = getDisplayName(entry.userId, membersMap, usersMap)
+      const displayName = getDisplayName(entry.userId, usersMap)
 
       // Add emoji for top 3 positions
       let rankEmoji = ''

@@ -1,6 +1,5 @@
 import {
   type ChatInputCommandInteraction,
-  type GuildMember,
   MessageFlags,
   SlashCommandBuilder,
   type User,
@@ -17,14 +16,6 @@ export const data = new SlashCommandBuilder()
   .setDescription("View Teto's intimacy leaderboard for this server")
 
 /**
- * Interface for user data maps
- */
-interface UserDataMaps {
-  membersMap: Map<string, GuildMember>
-  usersMap: Map<string, User>
-}
-
-/**
  * Create a promise that rejects after a timeout
  */
 function createTimeoutPromise<T>(timeoutMs: number): Promise<T> {
@@ -35,20 +26,14 @@ function createTimeoutPromise<T>(timeoutMs: number): Promise<T> {
 
 /**
  * Fetch user data from Discord API with timeout handling
- * This replaces the Elixir Task.async/await pattern with Promise-based concurrency
+ * Refactored to avoid guild_members intent by only fetching user data
  */
 async function fetchUserDataConcurrently(
   interaction: ChatInputCommandInteraction,
   userIds: string[]
-): Promise<UserDataMaps> {
-  const guild = interaction.guild
-  if (!guild) {
-    throw new Error('Guild not available')
-  }
-
+): Promise<Map<string, User>> {
   try {
-    // Create promises for concurrent execution
-    const memberPromise = guild.members.fetch({ limit: 1000 })
+    // Only fetch user data, no guild members
     const userPromises = userIds.map((userId) =>
       interaction.client.users.fetch(userId).catch((error) => {
         console.warn(`Failed to fetch user ${userId}:`, error)
@@ -56,23 +41,13 @@ async function fetchUserDataConcurrently(
       })
     )
 
-    // Race against timeout - equivalent to Elixir's receive...after pattern
-    const dataPromise = Promise.all([memberPromise, ...userPromises])
-    const timeoutPromise =
-      // biome-ignore lint/suspicious/noExplicitAny: <explanation>
-      createTimeoutPromise<[any, ...(User | null)[]]>(API_TIMEOUT)
+    // Race against timeout
+    const dataPromise = Promise.all(userPromises)
+    const timeoutPromise = createTimeoutPromise<(User | null)[]>(API_TIMEOUT)
 
-    const [members, ...users] = await Promise.race([
-      dataPromise,
-      timeoutPromise,
-    ])
+    const users = await Promise.race([dataPromise, timeoutPromise])
 
-    // Build maps from the results - members is a Collection from Discord.js
-    const membersMap = new Map<string, GuildMember>()
-    for (const member of members.values()) {
-      membersMap.set(member.user.id, member)
-    }
-
+    // Build map from the results
     const usersMap = new Map<string, User>()
     for (const user of users) {
       if (user) {
@@ -80,7 +55,7 @@ async function fetchUserDataConcurrently(
       }
     }
 
-    return { membersMap, usersMap }
+    return usersMap
   } catch (error) {
     if (error instanceof Error && error.message === 'Timeout') {
       throw new Error('TIMEOUT')
@@ -99,14 +74,10 @@ async function buildAndSendLeaderboard(
   const userIds = entries.map((entry) => entry.userId)
 
   try {
-    const { membersMap, usersMap } = await fetchUserDataConcurrently(
-      interaction,
-      userIds
-    )
+    const usersMap = await fetchUserDataConcurrently(interaction, userIds)
 
     const leaderboardEmbed = buildLeaderboardEmbed(
       entries,
-      membersMap,
       usersMap,
       interaction.guild?.name
     )
