@@ -2,6 +2,7 @@ import type { Message } from 'discord.js'
 import { Effect, Runtime } from 'effect'
 import { handleTetoInteraction } from '../commands/teto'
 import { ChannelService, type MainLive } from '../services'
+import { DiscordService } from '../services/discord'
 import { canBotSendMessages } from '../utils/permissions'
 
 /**
@@ -15,30 +16,6 @@ function buildTetoCommandReminderMessage(): string {
     'For example: `/teto Hello Teto!` ✨\n' +
     'Or You can chat with me one-on-one through DM!'
   )
-}
-
-/**
- * Send reminder with proper error handling
- */
-async function sendTetoCommandReminder(
-  message: Message,
-  runtime: Runtime.Runtime<never>
-): Promise<void> {
-  try {
-    await message.reply(buildTetoCommandReminderMessage())
-  } catch (error: unknown) {
-    // Handle Discord API errors gracefully
-    const discordError = error as { code?: number; message?: string }
-    if (discordError.code === 50013) {
-      Effect.logWarning(
-        `Missing permissions to send message in channel ${message.channelId} (guild: ${message.guildId})`
-      ).pipe(Runtime.runSync(runtime))
-    } else {
-      Effect.logError(
-        `Failed to send reminder message: ${discordError.message || String(error)}`
-      ).pipe(Runtime.runSync(runtime))
-    }
-  }
 }
 
 /**
@@ -113,9 +90,15 @@ export const messageCreateListener =
 
     // Log the interaction attempt
     Effect.logInfo(
-      `User ${message.author.username}(${message.author.id}) sent message in whitelisted channel ${message.channelId} (guild: ${message.guildId})`
+      `User ${message.author.username}(${message.author.id}) sent message in channel ${message.channelId} (guild: ${message.guildId})`
     ).pipe(Runtime.runSync(runtime))
 
     // Send reminder message
-    await sendTetoCommandReminder(message, runtime)
+    await DiscordService.pipe(
+      Effect.flatMap((discordService) =>
+        discordService.reply(message, buildTetoCommandReminderMessage())
+      ),
+      Effect.provide(live),
+      Runtime.runPromise(runtime)
+    )
   }

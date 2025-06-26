@@ -43,37 +43,42 @@ const config = Effect.runSync(appConfig)
  * Build the Teto status embed
  */
 export function buildTetoStatusEmbed(
-  metrics: UserMetrics,
+  metrics: UserMetrics | null,
   status: UserStatus,
-  userGuild: UserGuildData,
+  userGuild: UserGuildData | null,
   userData: DiscordUserData,
   guildName?: string
 ): EmbedBuilder {
-  const { intimacy, dailyMessageCount } = metrics
-  const { current, next } = getTierInfo(intimacy)
-
-  const nextTierMessage = buildNextTierMessage(
-    current.tier,
-    next.tier,
-    current.value,
-    next.value
-  )
-  const feedCooldownMessage = getFeedCooldownMessage(userGuild.lastFeed)
-
-  // Build comprehensive description
-  const descriptionParts = [
-    '### 💕 Relationship Status',
-    `**Intimacy:** ${intimacy}`,
-    `**Relationship:** ${current.tier}`,
-    nextTierMessage,
-    feedCooldownMessage,
-    `**Daily Messages:** ${dailyMessageCount} in this guild`,
+  const messageCreditsParts = [
     '### 💳 Message Credits',
     `**Credits Available:** ${status.messageCredits}`,
     '**Cost:** Each message costs 1 credit',
     'Daily credit refill happens at **midnight UTC (12am)** each day.',
-    '',
   ]
+
+  // Build comprehensive description
+  const descriptionParts = metrics
+    ? [
+        '### 💕 Relationship Status',
+        `**Intimacy:** ${metrics.intimacy}`,
+        ...(() => {
+          const { current, next } = getTierInfo(metrics.intimacy)
+          const relationshipPart = `**Relationship:** ${current.tier}`
+          const nextTierPart = buildNextTierMessage(
+            current.tier,
+            next.tier,
+            current.value,
+            next.value
+          )
+
+          return [relationshipPart, nextTierPart]
+        })(),
+        userGuild ? getFeedCooldownMessage(userGuild.lastFeed) : null,
+        `**Daily Messages:** ${metrics.dailyMessageCount} in this guild`,
+        ...messageCreditsParts,
+        '',
+      ]
+    : [...messageCreditsParts, '']
 
   // Add voting reminder if not voted
   if (!status.hasVoted) {

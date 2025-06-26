@@ -2,46 +2,107 @@
  * Discord related services
  */
 
-import type { Message } from 'discord.js'
-import { Data, Effect, Runtime } from 'effect'
+import { type Message, RESTJSONErrorCodes } from 'discord.js'
+import { Context, Data, Effect, Layer } from 'effect'
 
-export class DiscordMessageErorr extends Data.TaggedError(
+export class DiscordMessageError extends Data.TaggedError(
   'DiscordMessageError'
 )<{
-  message: unknown
+  code?: number
+  message: string
+  channelId?: string
+  guildId?: string | null
 }> {}
 
-/**
- * Safely reply to a Discord message with proper error handling for permission issues
- */
-export async function safeReply(
-  message: Message,
-  content: string,
-  runtime: Runtime.Runtime<never>
-): Promise<boolean> {
-  try {
-    await message.reply(content)
-    return true
-  } catch (error: unknown) {
-    // Handle specific Discord API errors
-    const discordError = error as { code?: number; message?: string }
-    if (discordError.code === 50013) {
-      Effect.logWarning(
-        `Missing permissions to send message in channel ${message.channelId} (guild: ${message.guildId})`
-      ).pipe(Runtime.runSync(runtime))
-    } else if (discordError.code === 50001) {
-      Effect.logWarning(
-        `Missing access to channel ${message.channelId} (guild: ${message.guildId})`
-      ).pipe(Runtime.runSync(runtime))
-    } else if (discordError.code === 10003) {
-      Effect.logWarning(
-        `Unknown channel ${message.channelId} (guild: ${message.guildId})`
-      ).pipe(Runtime.runSync(runtime))
-    } else {
-      Effect.logError(
-        `Failed to send message reply: ${discordError.message || String(error)}`
-      ).pipe(Runtime.runSync(runtime))
-    }
-    return false
-  }
+export interface DiscordService {
+  /**
+   * Safely reply to a Discord message with proper error handling for permission issues
+   */
+  readonly reply: (
+    message: Message,
+    content: string
+  ) => Effect.Effect<boolean, DiscordMessageError>
 }
+
+export const DiscordService =
+  Context.GenericTag<DiscordService>('DiscordService')
+
+const make: Effect.Effect<DiscordService> = Effect.gen(function* () {
+  const reply = (
+    message: Message,
+    content: string
+  ): Effect.Effect<boolean, DiscordMessageError> =>
+    Effect.gen(function* () {
+      yield* Effect.logDebug(
+        `Attempting to reply to message in channel ${message.channelId}`
+      )
+
+      return yield* Effect.tryPromise({
+        try: () => message.reply(content),
+        catch: (error) => {
+          const discordError = error as { code?: number; message?: string }
+
+          if (discordError.code === RESTJSONErrorCodes.MissingPermissions) {
+            return new DiscordMessageError({
+              code: discordError.code,
+              message: `Missing permissions to send message in channel ${message.channelId}`,
+              channelId: message.channelId,
+              guildId: message.guildId,
+            })
+          }
+
+          if (discordError.code === RESTJSONErrorCodes.MissingAccess) {
+            return new DiscordMessageError({
+              code: discordError.code,
+              message: `Missing access to channel ${message.channelId}`,
+              channelId: message.channelId,
+              guildId: message.guildId,
+            })
+          }
+
+          if (discordError.code === RESTJSONErrorCodes.UnknownChannel) {
+            return new DiscordMessageError({
+              code: discordError.code,
+              message: `Unknown channel ${message.channelId}`,
+              channelId: message.channelId,
+              guildId: message.guildId,
+            })
+          }
+
+          return new DiscordMessageError({
+            code: discordError.code,
+            message: `Failed to send message reply: ${discordError.message || String(error)}`,
+            channelId: message.channelId,
+            guildId: message.guildId,
+          })
+        },
+      }).pipe(
+        Effect.tap(() =>
+          Effect.logDebug(
+            `Successfully replied to message in channel ${message.channelId}`
+          )
+        ),
+        Effect.map(() => true),
+        Effect.catchAll((error) =>
+          Effect.gen(function* () {
+            if (
+              error.code === 50013 ||
+              error.code === 50001 ||
+              error.code === 10003
+            ) {
+              yield* Effect.logWarning(error.message)
+            } else {
+              yield* Effect.logError(error.message)
+            }
+            return false
+          })
+        )
+      )
+    })
+
+  return DiscordService.of({
+    reply,
+  })
+})
+
+export const DiscordServiceLive = Layer.effect(DiscordService, make)

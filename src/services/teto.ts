@@ -42,7 +42,7 @@ export function getTierInfo(intimacy: number): {
 
   return {
     current: {
-      value: currentTier.requiredIntimacy,
+      value: intimacy,
       tier: currentTier.name,
     },
     next: {

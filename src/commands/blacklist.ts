@@ -68,6 +68,14 @@ export async function execute(
   live: typeof MainLive,
   interaction: ChatInputCommandInteraction
 ) {
+  if (!interaction.guildId) {
+    await interaction.reply({
+      content: 'This command can only be used in a server.',
+      flags: MessageFlags.Ephemeral,
+    })
+    return
+  }
+
   // Check permissions
   if (!hasManageChannelsPermission(interaction)) {
     await interaction.reply({
@@ -78,14 +86,6 @@ export async function execute(
   }
 
   const channel = interaction.options.getChannel('channel', true)
-
-  if (!interaction.guildId) {
-    await interaction.reply({
-      content: 'This command can only be used in a server.',
-      flags: MessageFlags.Ephemeral,
-    })
-    return
-  }
 
   // Convert Effect to Either and run it
   const program = blacklistChannelEffect(

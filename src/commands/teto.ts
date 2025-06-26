@@ -2,7 +2,6 @@ import { type AIMessageChunk, HumanMessage } from '@langchain/core/messages'
 import {
   type Attachment,
   type ChatInputCommandInteraction,
-  MessageFlags,
   SlashCommandBuilder,
 } from 'discord.js'
 import { Effect, Either, Runtime } from 'effect'

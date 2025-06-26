@@ -610,7 +610,7 @@ export const lyricsApi = {
 // Discord Operations Types (Optimized endpoints)
 export interface EnsureUserGuildExistsRequest {
   userId: string
-  guildId: string
+  guildId?: string
   role?: 'user' | 'admin'
 }
 
@@ -623,7 +623,7 @@ export interface RecordUserMessageRequest {
 export interface EnsureUserGuildExistsResponse {
   data: {
     user: User
-    userGuild: UserGuild
+    userGuild?: UserGuild
   }
 }
 

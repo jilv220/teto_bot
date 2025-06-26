@@ -14,6 +14,10 @@ export class ChannelService extends Context.Tag('ChannelService')<
   ChannelService,
   {
     isChannelWhitelisted: (channelId: string) => Effect.Effect<boolean, never>
+    checkChannelAccess: (
+      channelId: string,
+      predicate: (channelId: string) => boolean
+    ) => Effect.Effect<boolean, never>
   }
 >() {}
 
@@ -26,6 +30,21 @@ const make = Effect.gen(function* () {
         Effect.map(() => true),
         Effect.catchAll(() => Effect.succeed(false))
       ),
+    checkChannelAccess: (
+      channelId: string,
+      predicate: (channelId: string) => boolean
+    ) =>
+      Effect.gen(function* () {
+        // Check special case first (e.g., DM channels)
+        if (predicate(channelId)) {
+          return true
+        }
+        // Otherwise check if channel is whitelisted
+        return yield* apiService.effectApi.channels.getChannel(channelId).pipe(
+          Effect.map(() => true),
+          Effect.catchAll(() => Effect.succeed(false))
+        )
+      }),
   })
 })
 

@@ -4,7 +4,7 @@ import {
   MessageFlags,
   SlashCommandBuilder,
 } from 'discord.js'
-import { Effect, Either, Runtime } from 'effect'
+import { Effect, Either, Option, Runtime } from 'effect'
 import { v4 as uuidv4 } from 'uuid'
 import { ChannelService, type MainLive } from '../services'
 import { effectApi } from '../services/api/client'
@@ -26,24 +26,20 @@ export async function execute(
   const guildId = interaction.guildId
   const channelId = interaction.channelId
   const username = interaction.user.username
+  const isDM = !guildId
 
-  if (!guildId) {
-    await interaction.reply({
-      content: 'This command can only be used in a server.',
-      flags: MessageFlags.Ephemeral,
-    })
-    return
-  }
-
-  // Check if channel is whitelisted
-  const isWhitelisted = await Effect.gen(function* () {
+  // Check channel access (allows DMs, requires whitelist for guild channels)
+  const isChannelAllowed = await Effect.gen(function* () {
     const channelService = yield* ChannelService
-    return yield* channelService.isChannelWhitelisted(channelId)
+    return yield* channelService.checkChannelAccess(
+      channelId,
+      () => isDM // Predicate: allow if it's a DM
+    )
   }).pipe(Effect.provide(live), Runtime.runPromise(runtime))
 
-  if (!isWhitelisted) {
+  if (!isChannelAllowed) {
     await interaction.reply({
-      content: 'This command can only be used in whitelisted channels. ',
+      content: 'This command can only be used in whitelisted channels.',
       flags: MessageFlags.Ephemeral,
     })
     return

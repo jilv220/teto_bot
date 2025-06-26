@@ -1,8 +1,9 @@
 import { Layer } from 'effect'
 import { ApiServiceLive } from './api'
+import { ChannelServiceLive } from './channel'
 import { ChannelRateLimiterLive } from './channelRateLimiter'
-import { ChannelServiceLive } from './channelService'
 import { ClientLive } from './client'
+import { DiscordServiceLive } from './discord'
 import {
   LLMConversationModelLive,
   LLMLive,
@@ -26,9 +27,10 @@ export const MainLive = Layer.mergeAll(
   LLMConversationModelLive,
   ChannelRateLimiterLive,
   ApiServiceLive,
-  ChannelServiceLive
+  ChannelServiceLive,
+  DiscordServiceLive
 )
 
 // Re-export service components
 export * from './api'
-export * from './channelService'
+export * from './channel'

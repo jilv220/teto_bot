@@ -70,20 +70,20 @@ export async function execute(
   live: typeof MainLive,
   interaction: ChatInputCommandInteraction
 ) {
-  // Check permissions
-  if (!hasManageChannelsPermission(interaction)) {
-    await interaction.reply({
-      content: 'You need the "Manage Channels" permission to use this command.',
-      flags: MessageFlags.Ephemeral,
-    })
-    return
-  }
-
   const channel = interaction.options.getChannel('channel', true)
 
   if (!interaction.guildId) {
     await interaction.reply({
       content: 'This command can only be used in a server.',
+      flags: MessageFlags.Ephemeral,
+    })
+    return
+  }
+
+  // Check permissions
+  if (!hasManageChannelsPermission(interaction)) {
+    await interaction.reply({
+      content: 'You need the "Manage Channels" permission to use this command.',
       flags: MessageFlags.Ephemeral,
     })
     return
