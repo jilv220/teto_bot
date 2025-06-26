@@ -27,6 +27,8 @@ export const ClientLive = Layer.effect(
       intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
+        // TODO: remove after bot in 100+ guilds
+        GatewayIntentBits.MessageContent,
         GatewayIntentBits.DirectMessages,
       ],
     })

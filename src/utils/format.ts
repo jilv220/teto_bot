@@ -14,7 +14,3 @@ export function formatTimeLeft(milliseconds: number): string {
   }
   return `${minutes} minute${minutes !== 1 ? 's' : ''}`
 }
-
-export const formatNum = (num: number): string => {
-  return new Intl.NumberFormat().format(num)
-}

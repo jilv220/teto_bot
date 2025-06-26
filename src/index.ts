@@ -2,7 +2,11 @@ import { BunRuntime } from '@effect/platform-bun'
 import { Collection } from 'discord.js'
 import { Effect, Layer, Runtime } from 'effect'
 import { AutoPoster } from 'topgg-autoposter'
-import { interactionCreateListener, ready } from './listeners'
+import {
+  interactionCreateListener,
+  messageCreateListener,
+  ready,
+} from './listeners'
 import { guildCreateListener } from './listeners/guildCreate'
 import { guildDeleteListener } from './listeners/guildDelete'
 import { MainLive } from './services'
@@ -83,7 +87,8 @@ const program = Effect.scoped(
           .on('ready', ready(runtime))
           .on('guildCreate', guildCreateListener(runtime, mainLive))
           .on('guildDelete', guildDeleteListener(runtime, mainLive))
-          // messageCreateListener Deleted - no MESSAGE_CONTENT intent
+          // TODO: remove after bot in 100+ guilds
+          .on('messageCreate', messageCreateListener(runtime, mainLive))
           .on('interactionCreate', interactionCreateListener(runtime, mainLive))
 
         // Set up autoposter listeners
