@@ -87,7 +87,7 @@ const program = Effect.scoped(
           .on('ready', ready(runtime))
           .on('guildCreate', guildCreateListener(runtime, mainLive))
           .on('guildDelete', guildDeleteListener(runtime, mainLive))
-          // TODO: remove after bot in 100+ guilds
+          // TODO: remove the message part after bot in 100+ guilds
           .on('messageCreate', messageCreateListener(runtime, mainLive))
           .on('interactionCreate', interactionCreateListener(runtime, mainLive))
 

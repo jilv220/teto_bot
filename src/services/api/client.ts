@@ -616,25 +616,21 @@ export interface EnsureUserGuildExistsRequest {
 
 export interface RecordUserMessageRequest {
   userId: string
-  guildId: string
+  guildId?: string
   intimacyIncrement?: number
 }
 
-export type EnsureUserGuildExistsResponse = {
+export interface EnsureUserGuildExistsResponse {
   data: {
     user: User
     userGuild: UserGuild
-    userCreated: boolean
-    userGuildCreated: boolean
   }
 }
 
 export interface RecordUserMessageResponse {
   data: {
     user: User
-    userGuild: UserGuild
-    userCreated: boolean
-    userGuildCreated: boolean
+    userGuild?: UserGuild
   }
 }
 

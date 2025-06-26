@@ -1,5 +1,6 @@
 import type { Message } from 'discord.js'
 import { Effect, Runtime } from 'effect'
+import { handleTetoInteraction } from '../commands/teto'
 import { ChannelService, type MainLive } from '../services'
 import { canBotSendMessages } from '../utils/permissions'
 
@@ -8,11 +9,11 @@ import { canBotSendMessages } from '../utils/permissions'
  */
 function buildTetoCommandReminderMessage(): string {
   return (
-    "Hey there! Due to Discord's regulation of privileged intents such as MESSAGE_CONTENT," +
-    "I've switched to slash commands now! " +
+    "Hey there! Due to Discord's regulation of privileged intents such as MESSAGE_CONTENT, " +
+    "I've switched to slash commands now!\n" +
     'Use `/teto <message> <image>` to chat with me. ' +
-    'For example: `/teto Hello Teto!` ✨\n\n' +
-    'You can also use `/help` to see all my available commands!'
+    'For example: `/teto Hello Teto!` ✨\n' +
+    'Or You can chat with me one-on-one through DM!'
   )
 }
 
@@ -41,20 +42,58 @@ async function sendTetoCommandReminder(
 }
 
 /**
- * Handle messages to remind users to use slash commands
- * This listener responds to messages and reminds users to use /teto
- * Only responds in whitelisted channels and when bot has permissions
+ * Handle messages - process DMs naturally and send reminders in guild channels
  */
 export const messageCreateListener =
   (runtime: Runtime.Runtime<never>, live: typeof MainLive) =>
   async (message: Message): Promise<void> => {
+    // Handle partial messages (important for DMs)
+    if (message.partial) {
+      try {
+        await message.fetch()
+      } catch (error) {
+        Effect.logError(`Failed to fetch partial message: ${error}`).pipe(
+          Runtime.runSync(runtime)
+        )
+        return
+      }
+    }
+
     // Ignore messages from bots (including ourselves)
     if (message.author.bot) return
 
-    // Only respond in guild channels (not DMs for now)
-    if (!message.guildId) return
+    // Handle DMs naturally - process them as Teto interactions
+    if (!message.guildId) {
+      // Extract image attachments if any
+      const imageAttachment =
+        message.attachments.size > 0
+          ? Array.from(message.attachments.values()).find((att) =>
+              att.contentType?.startsWith('image/')
+            )
+          : null
 
-    // Check if channel is whitelisted
+      try {
+        await handleTetoInteraction(runtime, live, {
+          content: message.content,
+          imageAttachment: imageAttachment || null,
+          userId: message.author.id,
+          username: message.author.username,
+          channelId: message.channelId,
+          guildId: null,
+          reply: async (content: string) => {
+            await message.reply(content)
+          },
+          // No deferReply needed for regular messages
+        })
+      } catch (error) {
+        Effect.logError(`Error handling DM: ${error}`).pipe(
+          Runtime.runSync(runtime)
+        )
+      }
+      return
+    }
+
+    // For guild messages, check if channel is whitelisted and send reminder
     const isChannelWhitelisted = await ChannelService.pipe(
       Effect.flatMap(({ isChannelWhitelisted }) =>
         isChannelWhitelisted(message.channelId)

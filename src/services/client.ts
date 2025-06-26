@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits } from 'discord.js'
+import { Client, GatewayIntentBits, Partials } from 'discord.js'
 import type { Collection } from 'discord.js'
 import { Context, Effect, Layer } from 'effect'
 import { appConfig } from './config'
@@ -30,7 +30,9 @@ export const ClientLive = Layer.effect(
         // TODO: remove after bot in 100+ guilds
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.DirectMessages,
+        GatewayIntentBits.DirectMessageTyping,
       ],
+      partials: [Partials.Channel, Partials.Message],
     })
 
     yield* Effect.tryPromise(() => client.login(config.botToken))

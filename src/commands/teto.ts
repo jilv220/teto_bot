@@ -19,7 +19,7 @@ import { containsInjection } from '../services/messages/filter'
 
 export const data = new SlashCommandBuilder()
   .setName('teto')
-  .setDescription('Chat with Teto!')
+  .setDescription('Chat with Teto in servers!')
   .addStringOption((option) =>
     option
       .setName('message')
@@ -88,44 +88,59 @@ const createLLMResponse = (
     return lastMessage
   }).pipe(Effect.tapError((error) => Effect.logError(error)))
 
-export async function execute(
+/**
+ * Shared function to handle Teto interactions (used by both slash commands and DM messages)
+ */
+export const handleTetoInteraction = async (
   runtime: Runtime.Runtime<never>,
   live: typeof MainLive,
-  interaction: ChatInputCommandInteraction
-): Promise<void> {
-  const message = interaction.options.getString('message', true)
-  const imageOption = interaction.options.getAttachment('image')
+  options: {
+    content: string
+    imageAttachment?: Attachment | null
+    userId: string
+    username: string
+    channelId: string
+    guildId: string | null
+    reply: (content: string) => Promise<void>
+    deferReply?: () => Promise<void>
+  }
+): Promise<void> => {
+  const {
+    content,
+    imageAttachment,
+    userId,
+    username,
+    channelId,
+    guildId,
+    reply,
+    deferReply,
+  } = options
+  const isDM = !guildId
 
-  // Check if user is in a guild
-  if (!interaction.guildId) {
-    await interaction.reply({
-      content: 'This command can only be used in servers!',
-      flags: MessageFlags.Ephemeral,
-    })
-    return
+  Effect.logInfo(
+    `User: ${username}(${userId}) interacted with Teto through ${isDM ? 'DM' : 'server'}`
+  ).pipe(Effect.provide(live), Runtime.runSync(runtime))
+
+  // For guild interactions, check if channel is whitelisted
+  if (!isDM) {
+    const isChannelWhitelisted = await ChannelService.pipe(
+      Effect.flatMap(({ isChannelWhitelisted }) =>
+        isChannelWhitelisted(channelId)
+      )
+    ).pipe(Effect.provide(live), Runtime.runPromise(runtime))
+
+    if (!isChannelWhitelisted) {
+      await reply('This channel is not whitelisted for Teto interactions!')
+      return
+    }
   }
 
-  // Check if channel is whitelisted first
-  const isChannelWhitelisted = await ChannelService.pipe(
-    Effect.flatMap(({ isChannelWhitelisted }) =>
-      isChannelWhitelisted(interaction.channelId)
-    )
-  ).pipe(Effect.provide(live), Runtime.runPromise(runtime))
-
-  if (!isChannelWhitelisted) {
-    await interaction.reply({
-      content: 'This channel is not whitelisted for Teto interactions!',
-      flags: MessageFlags.Ephemeral,
-    })
-    return
-  }
-
-  // RateLimit channel
+  // RateLimit channel (works for both DMs and guild channels)
   const rateLimitRes = ChannelRateLimiter.pipe(
     Effect.flatMap((limiter) =>
       Effect.all({
-        isRateLimited: limiter.isRateLimited(interaction.channelId),
-        timeUntilReset: limiter.getTimeUntilReset(interaction.channelId),
+        isRateLimited: limiter.isRateLimited(channelId),
+        timeUntilReset: limiter.getTimeUntilReset(channelId),
       })
     )
   ).pipe(Effect.provide(live), Runtime.runSync(runtime))
@@ -133,30 +148,31 @@ export async function execute(
   // Send RateLimit Msg
   if (rateLimitRes.isRateLimited) {
     const secondsUntilReset = Math.ceil(rateLimitRes.timeUntilReset / 1000)
-    await interaction.reply({
-      content: `This channel is being rate limited. Please wait ${secondsUntilReset} seconds before sending another message.`,
-      flags: MessageFlags.Ephemeral,
-    })
+    await reply(
+      `This channel is being rate limited. Please wait ${secondsUntilReset} seconds before sending another message.`
+    )
     return
   }
 
-  // Defer reply, for llm reply can take more than 3 seconds in some cases
-  await interaction.deferReply()
+  // Defer reply if function is provided (for slash commands)
+  if (deferReply) {
+    await deferReply()
+  }
 
   try {
-    // Record user message
+    // Record user message (handle DMs with null guildId)
     const userMsgRecordRes = await ApiService.pipe(
       Effect.flatMap(({ effectApi }) =>
         effectApi.discord.recordUserMessage({
-          userId: interaction.user.id,
-          guildId: interaction.guildId || '',
+          userId: userId,
+          guildId: guildId || undefined,
           intimacyIncrement: 1,
         })
       )
     ).pipe(
       Effect.tap((resp) =>
         Effect.logInfo(
-          `Recording message - User: ${interaction.user.username}(${interaction.user.id}) from (Guild: ${interaction.guildId})`
+          `Recording message - User: ${username}(${userId}) from (${isDM ? 'DM' : `Guild: ${guildId}`})`
         )
       ),
       Effect.mapError((error) => {
@@ -174,24 +190,24 @@ export async function execute(
       Either.isLeft(userMsgRecordRes) &&
       userMsgRecordRes.left === 'not enough credit'
     ) {
-      await interaction.editReply({
-        content: `You've run out of message credits! Vote for the bot to get more credits.\n${config.voteUrl}`,
-      })
+      await reply(
+        `You've run out of message credits! Vote for the bot to get more credits.\n${config.voteUrl}`
+      )
       return
     }
 
     // Check for prompt injection attempts
-    if (containsInjection(message)) {
+    if (containsInjection(content)) {
       Effect.logWarning(
-        `Prompt injection detected from user ${interaction.user.username}(${interaction.user.id}) in guild ${interaction.guildId}: "${message}"`
+        `Prompt injection detected from user ${username}(${userId}) in ${isDM ? 'DM' : `guild ${guildId}`}: "${content}"`
       ).pipe(Runtime.runSync(runtime))
 
       const teasingResponse = await createLLMResponse(
         buildPromptInjectionMessage(),
         null,
         0, // Use intimacy level 0 for injection attempts
-        interaction.user.username,
-        interaction.channelId
+        username,
+        channelId
       )
         .pipe(Effect.provide(live), Runtime.runPromise(runtime))
         .catch(() => {
@@ -201,44 +217,63 @@ export async function execute(
           }
         })
 
-      await interaction.editReply({
-        content: String(teasingResponse.content),
-      })
+      await reply(String(teasingResponse.content))
       return
     }
 
     // Get user intimacy for LLM context
     const intimacy =
       userMsgRecordRes._tag === 'Right'
-        ? userMsgRecordRes.right.data.userGuild.intimacy
+        ? userMsgRecordRes.right.data.userGuild?.intimacy || 0
         : 0
 
     // Generate LLM response
     const response = await createLLMResponse(
-      message,
-      imageOption,
+      content,
+      imageAttachment || null,
       intimacy,
-      interaction.user.username,
-      interaction.channelId
+      username,
+      channelId
     ).pipe(Effect.provide(live), Runtime.runPromise(runtime))
 
-    await interaction.editReply({
-      content: String(response.content),
-    })
+    await reply(String(response.content))
   } catch (error) {
-    Effect.logError(`Error in chat command: ${error}`).pipe(
+    Effect.logError(`Error in Teto interaction: ${error}`).pipe(
       Runtime.runSync(runtime)
     )
 
     try {
-      await interaction.editReply({
-        content:
-          'Sorry, I encountered an error while processing your message. Please try again later.',
-      })
+      await reply(
+        'Sorry, I encountered an error while processing your message. Please try again later.'
+      )
     } catch (replyError) {
       Effect.logError(`Failed to send error reply: ${replyError}`).pipe(
         Runtime.runSync(runtime)
       )
     }
   }
+}
+
+export async function execute(
+  runtime: Runtime.Runtime<never>,
+  live: typeof MainLive,
+  interaction: ChatInputCommandInteraction
+): Promise<void> {
+  const message = interaction.options.getString('message', true)
+  const imageOption = interaction.options.getAttachment('image')
+
+  await handleTetoInteraction(runtime, live, {
+    content: message,
+    imageAttachment: imageOption,
+    userId: interaction.user.id,
+    username: interaction.user.username,
+    channelId: interaction.channelId,
+    guildId: interaction.guildId,
+    reply: async (content: string) => {
+      await interaction.editReply({ content })
+    },
+    deferReply: async () => {
+      await interaction.deferReply()
+    },
+  })
 }
