@@ -8,8 +8,9 @@ import { canBotSendMessages } from '../utils/permissions'
  */
 function buildTetoCommandReminderMessage(): string {
   return (
-    "Hey there! 🎵 I've switched to slash commands now! " +
-    'Use `/teto` followed by your message to chat with me. ' +
+    "Hey there! Due to Discord's regulation of privileged intents such as MESSAGE_CONTENT," +
+    "I've switched to slash commands now! " +
+    'Use `/teto <message> <image>` to chat with me. ' +
     'For example: `/teto Hello Teto!` ✨\n\n' +
     'You can also use `/help` to see all my available commands!'
   )
