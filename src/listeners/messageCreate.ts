@@ -1,15 +1,15 @@
 import type { Message } from 'discord.js'
 import { Effect, Runtime } from 'effect'
-import type { MainLive } from '../services'
+import { ChannelService, type MainLive } from '../services'
+import { canBotSendMessages } from '../utils/permissions'
 
 /**
  * Generate a friendly reminder message for users to use the /teto command
  */
 function buildTetoCommandReminderMessage(): string {
   return (
-    "Hey there! Due to Discord's regulation of privileged intents such as MESSAGE_CONTENT," +
-    "I've switched to slash commands now! " +
-    'Use `/teto <message> <image>` followed by your message to chat with me. ' +
+    "Hey there! 🎵 I've switched to slash commands now! " +
+    'Use `/teto` followed by your message to chat with me. ' +
     'For example: `/teto Hello Teto!` ✨\n\n' +
     'You can also use `/help` to see all my available commands!'
   )
@@ -41,7 +41,8 @@ async function sendTetoCommandReminder(
 
 /**
  * Handle messages to remind users to use slash commands
- * It reminds users to use /teto instead of old interaction methods
+ * This listener responds to messages and reminds users to use /teto
+ * Only responds in whitelisted channels and when bot has permissions
  */
 export const messageCreateListener =
   (runtime: Runtime.Runtime<never>, live: typeof MainLive) =>
@@ -49,9 +50,30 @@ export const messageCreateListener =
     // Ignore messages from bots (including ourselves)
     if (message.author.bot) return
 
+    // Only respond in guild channels (not DMs for now)
+    if (!message.guildId) return
+
+    // Check if channel is whitelisted
+    const isChannelWhitelisted = await ChannelService.pipe(
+      Effect.flatMap(({ isChannelWhitelisted }) =>
+        isChannelWhitelisted(message.channelId)
+      )
+    )
+      .pipe(Effect.provide(live), Runtime.runPromise(runtime))
+      .catch(() => false) // If check fails, assume not whitelisted
+
+    if (!isChannelWhitelisted) {
+      return
+    }
+
+    // Check if bot has permission to send messages in this channel
+    if (!canBotSendMessages(message)) {
+      return
+    }
+
     // Log the interaction attempt
     Effect.logInfo(
-      `User ${message.author.username}(${message.author.id}) tried to interact via message in guild ${message.guildId}`
+      `User ${message.author.username}(${message.author.id}) sent message in whitelisted channel ${message.channelId} (guild: ${message.guildId})`
     ).pipe(Runtime.runSync(runtime))
 
     // Send reminder message
