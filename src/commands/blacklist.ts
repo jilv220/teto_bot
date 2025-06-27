@@ -7,7 +7,7 @@ import {
 import { Effect, Either, Runtime } from 'effect'
 import type { MainLive } from '../services'
 import { type ApiError, ApiService, effectApi } from '../services/api'
-import { hasManageChannelsPermission } from '../utils/permissions'
+import { hasManageChannelsPermissionFromInteraction } from '../utils/permissions'
 
 export const data = new SlashCommandBuilder()
   .setName('blacklist')
@@ -77,7 +77,7 @@ export async function execute(
   }
 
   // Check permissions
-  if (!hasManageChannelsPermission(interaction)) {
+  if (!hasManageChannelsPermissionFromInteraction(interaction)) {
     await interaction.reply({
       content: 'You need the "Manage Channels" permission to use this command.',
       flags: MessageFlags.Ephemeral,

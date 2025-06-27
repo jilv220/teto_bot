@@ -18,6 +18,11 @@ export class ChannelService extends Context.Tag('ChannelService')<
       channelId: string,
       predicate: (channelId: string) => boolean
     ) => Effect.Effect<boolean, never>
+    whitelistChannel: (
+      channelId: string,
+      userId: string,
+      guildId: string
+    ) => Effect.Effect<void, never>
   }
 >() {}
 
@@ -45,6 +50,27 @@ const make = Effect.gen(function* () {
           Effect.catchAll(() => Effect.succeed(false))
         )
       }),
+    whitelistChannel: (channelId: string, userId: string, guildId: string) =>
+      Effect.gen(function* () {
+        // Ensure user-guild relationship exists
+        yield* apiService.effectApi.discord.ensureUserGuildExists({
+          userId,
+          guildId,
+        })
+
+        // Add channel to whitelist (create in database)
+        yield* apiService.effectApi.channels.createChannel({
+          channelId,
+          guildId,
+        })
+      }).pipe(
+        Effect.tapError((error) =>
+          Effect.logError(
+            `Failed to whitelist channel ${channelId}: ${error.message}`
+          )
+        ),
+        Effect.catchAll(() => Effect.succeed(undefined))
+      ),
   })
 })
 

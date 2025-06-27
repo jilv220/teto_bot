@@ -10,6 +10,7 @@ import {
   LLMSummarizationModelLive,
   LLMVisionModelLive,
 } from './llm'
+import { MessagesServiceLive } from './messages'
 
 /**
  *  Exporting Layers in index.ts of Services
@@ -28,7 +29,8 @@ export const MainLive = Layer.mergeAll(
   ChannelRateLimiterLive,
   ApiServiceLive,
   ChannelServiceLive,
-  DiscordServiceLive
+  DiscordServiceLive,
+  MessagesServiceLive
 )
 
 // Re-export service components

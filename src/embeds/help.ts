@@ -24,13 +24,24 @@ export function buildHelpEmbed(commands: CommandInfo[]): EmbedBuilder {
     .setColor(TETO_COLOR_SV)
     .setTitle('**TetoBot Help**')
     .setDescription(
-      'TetoBot cosplays as Kasane Teto, responding to messages in whitelisted channels with AI-generated replies.'
+      'Kasane Teto Bot roleplays as Kasane Teto, responding to @mentions in whitelisted channels with AI-generated replies. 🎵'
     )
     .addFields(
       {
         name: '**Chat with Teto:**',
         value:
-          'Simply @mention me in any whitelisted channel! For example:\n`@TetoBot Hello! How are you today?`',
+          '**@mention me in any channel!**\n' +
+          "• In whitelisted channels: I'll respond immediately\n" +
+          '• In new channels: Users with "Manage Channels" permission can @mention me to auto-whitelist the channel\n' +
+          '• Example: `@Kasane Teto Hello! How are you today?`',
+        inline: false,
+      },
+      {
+        name: '**Channel Management:**',
+        value:
+          '• **Auto-whitelist**: @mention me with "Manage Channels" permission\n' +
+          '• **Remove access**: Use `/blacklist` command\n' +
+          '• Both require "Manage Channels" permission',
         inline: false,
       },
       {

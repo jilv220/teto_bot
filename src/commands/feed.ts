@@ -10,7 +10,7 @@ import {
   ChannelService,
   type MainLive,
 } from '../services'
-import { ApiError, effectApi } from '../services/api/client'
+import type { ApiError } from '../services/api/client'
 import {
   buildFeedCooldownMessage,
   buildFeedSuccessMessage,
@@ -122,19 +122,10 @@ export async function execute(
 
   // Handle Either result
   if (Either.isLeft(result)) {
-    if (result.left instanceof ChannelNotWhitelistedError) {
-      await interaction.reply({
-        content: result.left.message,
-        flags: MessageFlags.Ephemeral,
-      })
-    }
-
-    if (result.left instanceof ApiError) {
-      await interaction.reply({
-        content: 'Something went wrong while feeding Teto. Please try again.',
-        flags: MessageFlags.Ephemeral,
-      })
-    }
+    await interaction.reply({
+      content: 'Something went wrong while feeding Teto. Please try again.',
+      flags: MessageFlags.Ephemeral,
+    })
   } else {
     // Success case - handle both success and cooldown
     const feedResult = result.right

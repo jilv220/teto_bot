@@ -107,11 +107,19 @@ async function buildAndSendLeaderboard(
  * Effect-based leaderboard operation
  */
 const fetchLeaderboardEffect = (
-  guildId: string
+  guildId: string,
+  userId: string
 ): Effect.Effect<LeaderboardEntry[], ApiError, ApiService> =>
   Effect.gen(function* () {
     const apiService = yield* ApiService
     const effectApi = apiService.effectApi
+
+    // Ensure the guild and user exist in the database first
+    // This handles cases where the guild creation failed or the user is new
+    yield* effectApi.discord.ensureUserGuildExists({
+      userId,
+      guildId,
+    })
 
     const result = yield* effectApi.leaderboard.getIntimacyLeaderboard({
       guildId,
@@ -134,6 +142,7 @@ export async function execute(
 ) {
   const guildId = interaction.guildId
   const channelId = interaction.channelId
+  const userId = interaction.user.id
 
   if (!guildId) {
     await interaction.reply({
@@ -158,7 +167,7 @@ export async function execute(
   }
 
   // Convert Effect to Either and run it
-  const program = fetchLeaderboardEffect(guildId).pipe(
+  const program = fetchLeaderboardEffect(guildId, userId).pipe(
     Effect.either,
     Effect.provide(live)
   )

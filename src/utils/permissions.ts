@@ -11,7 +11,7 @@ import { ApiService, ChannelService, type MainLive } from '../services'
 /**
  * Check if the user has the required permission to manage channels
  */
-export function hasManageChannelsPermission(
+export function hasManageChannelsPermissionFromInteraction(
   interaction: ChatInputCommandInteraction
 ): boolean {
   if (!interaction.memberPermissions) {
@@ -21,9 +21,36 @@ export function hasManageChannelsPermission(
 }
 
 /**
- * Check if the bot has permission to send messages in a channel
+ * Check if the message author has ManageChannels permission in the guild
+ */
+export function hasManageChannelsPermissionFromMessage(
+  message: Message
+): boolean {
+  if (!message.guild || !message.member) {
+    return false
+  }
+
+  return message.member.permissions.has(PermissionFlagsBits.ManageChannels)
+}
+
+/**
+ * Check if the bot should respond to a message
+ * Combines all filtering logic: bot check, guild check, mention check, and permissions
  */
 export function canBotSendMessages(message: Message): boolean {
+  // Ignore messages from bots (including ourselves)
+  if (message.author.bot) return false
+
+  // Only handle guild messages (ignore DMs)
+  if (!message.guildId) {
+    return false
+  }
+
+  // Check if the bot is mentioned
+  if (!message.mentions.has(message.client.user)) {
+    return false // Not mentioned, ignore
+  }
+
   const channel = message.channel
   const guild = message.guild
 

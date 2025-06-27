@@ -6,7 +6,6 @@ import {
 import { Effect, Either, Runtime } from 'effect'
 import { buildTetoStatusEmbed } from '../embeds/teto'
 import { ApiService, ChannelService, type MainLive } from '../services'
-import type { ApiError } from '../services/api/client'
 import { hasVotedRecently } from '../services/voting'
 
 export const data = new SlashCommandBuilder()

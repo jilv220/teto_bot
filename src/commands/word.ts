@@ -7,6 +7,7 @@ import {
 import { Effect, Either, Option, Runtime } from 'effect'
 import { v4 as uuidv4 } from 'uuid'
 import { ChannelService, type MainLive } from '../services'
+import { ApiService } from '../services'
 import { effectApi } from '../services/api/client'
 import { LLMConversationModelContext } from '../services/llm/model'
 import {
@@ -32,7 +33,6 @@ export async function execute(
     return
   }
 
-  const guildId = interaction.guildId
   const channelId = interaction.channelId
   const username = interaction.user.username
 

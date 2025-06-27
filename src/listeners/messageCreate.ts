@@ -1,32 +1,51 @@
 import { type AIMessageChunk, HumanMessage } from '@langchain/core/messages'
 import type { Attachment, Message } from 'discord.js'
+import { PermissionFlagsBits } from 'discord.js'
 import { Effect, Either, Runtime } from 'effect'
-import { ApiService, ChannelService, type MainLive } from '../services'
+import {
+  ApiService,
+  ChannelNotWhitelistedError,
+  ChannelService,
+  type MainLive,
+} from '../services'
+import type { RecordUserMessageResponse } from '../services/api/client'
 import { ChannelRateLimiter } from '../services/channelRateLimiter'
 import { appConfig, isProduction } from '../services/config'
+import { DiscordService } from '../services/discord'
 import { LLMContext } from '../services/llm'
 import { processImageAttachments } from '../services/llm/attachment'
 import {
   buildPromptInjectionFallbackMessage,
   buildPromptInjectionMessage,
 } from '../services/llm/prompt'
+import { MessagesService } from '../services/messages'
 import { containsInjection } from '../services/messages/filter'
-import { canBotSendMessages } from '../utils/permissions'
+import {
+  canBotSendMessages,
+  hasManageChannelsPermissionFromMessage,
+} from '../utils/permissions'
+
+const buildSetupMessage = () =>
+  "This channel isn't set up for Teto yet! 🎵\n\n" +
+  'To start using Teto here, someone with **Manage Channels** permission needs to mention me first.'
 
 const createLLMResponse = (
+  message: Message,
   content: string,
-  imageAttachment: Attachment | null,
-  intimacy: number,
-  username: string,
-  channelId: string
+  intimacy: number
 ) =>
   Effect.gen(function* () {
     const llm = yield* LLMContext
 
-    // Process any image attachments
-    const imageContent = imageAttachment
-      ? yield* processImageAttachments([imageAttachment])
-      : []
+    // Process any image attachments - filter for images here
+    const attachments = Array.from(message.attachments.values())
+    const imageAttachments = attachments.filter((att) =>
+      att.contentType?.startsWith('image/')
+    )
+    const imageContent =
+      imageAttachments.length > 0
+        ? yield* processImageAttachments(imageAttachments)
+        : []
     const hasImages = imageContent.length > 0
 
     // Create message content - either just text or multimodal
@@ -42,12 +61,12 @@ const createLLMResponse = (
 
     // Create simplified user context with just username and intimacy level
     const userContext = {
-      username: username,
+      username: message.author.username,
       intimacy: intimacy,
     }
 
     // One thread per channel basically
-    const config = { configurable: { thread_id: channelId } }
+    const config = { configurable: { thread_id: message.channelId } }
 
     const result = yield* Effect.promise(() =>
       llm.invoke(
@@ -69,77 +88,68 @@ const createLLMResponse = (
   }).pipe(Effect.tapError((error) => Effect.logError(error)))
 
 /**
- * Handle Teto interactions for @mentions in guild channels
+ * Handle messages - only respond to @mentions in guild channels
  */
-const handleTetoInteraction = async (
-  runtime: Runtime.Runtime<never>,
-  live: typeof MainLive,
-  options: {
-    content: string
-    imageAttachment?: Attachment | null
-    userId: string
-    username: string
-    channelId: string
-    guildId: string
-    reply: (content: string) => Promise<void>
-  }
-): Promise<void> => {
-  const {
-    content,
-    imageAttachment,
-    userId,
-    username,
-    channelId,
-    guildId,
-    reply,
-  } = options
+export const messageCreateListener =
+  (runtime: Runtime.Runtime<never>, live: typeof MainLive) =>
+  async (message: Message): Promise<void> => {
+    const userId = message.author.id
+    const username = message.author.username
+    const channelId = message.channelId
+    const guildId = message.guildId
 
-  Effect.logInfo(
-    `User: ${username}(${userId}) interacted with Teto via @mention in guild ${guildId}`
-  ).pipe(Effect.provide(live), Runtime.runSync(runtime))
+    const removeBotMentionEffect = Effect.gen(function* () {
+      const messagesService = yield* MessagesService
+      const content = yield* messagesService.removeBotMention(message)
+      yield* Effect.logInfo(
+        `User: ${username}(${userId}) interacted with Teto via @mention in guild ${guildId}`
+      )
+      return content
+    })
 
-  // Check if channel is whitelisted
-  const isChannelWhitelisted = await ChannelService.pipe(
-    Effect.flatMap(({ isChannelWhitelisted }) =>
-      isChannelWhitelisted(channelId)
-    )
-  ).pipe(Effect.provide(live), Runtime.runPromise(runtime))
+    const checkChannelWhitelistEffect = Effect.gen(function* () {
+      const channelService = yield* ChannelService
+      const isChannelWhitelisted =
+        yield* channelService.isChannelWhitelisted(channelId)
 
-  if (!isChannelWhitelisted) {
-    await reply('This channel is not whitelisted for Teto interactions!')
-    return
-  }
+      if (!isChannelWhitelisted) {
+        yield* Effect.log(`Channel ${channelId} is not yet whitelisted`)
+        // TODO: auto whitelist channel
+        return false // Not whitelisted, should stop processing
+      }
 
-  // RateLimit channel
-  const rateLimitRes = ChannelRateLimiter.pipe(
-    Effect.flatMap((limiter) =>
-      Effect.all({
-        isRateLimited: limiter.isRateLimited(channelId),
-        timeUntilReset: limiter.getTimeUntilReset(channelId),
+      return true // Whitelisted, continue processing
+    })
+
+    const checkRateLimitEffect = Effect.gen(function* () {
+      const rateLimiter = yield* ChannelRateLimiter
+      const { isRateLimited, timeUntilReset } = yield* Effect.all({
+        isRateLimited: rateLimiter.isRateLimited(channelId),
+        timeUntilReset: rateLimiter.getTimeUntilReset(channelId),
       })
-    )
-  ).pipe(Effect.provide(live), Runtime.runSync(runtime))
 
-  // Send RateLimit Msg
-  if (rateLimitRes.isRateLimited) {
-    const secondsUntilReset = Math.ceil(rateLimitRes.timeUntilReset / 1000)
-    await reply(
-      `This channel is being rate limited. Please wait ${secondsUntilReset} seconds before sending another message.`
-    )
-    return
-  }
+      if (isRateLimited) {
+        const secondsUntilReset = Math.ceil(timeUntilReset / 1000)
+        const discordService = yield* DiscordService
+        yield* discordService.reply(
+          message,
+          `This channel is being rate limited. Please wait ${secondsUntilReset} seconds before sending another message.`
+        )
+        return false // Rate limited, should stop processing
+      }
 
-  try {
-    // Record user message
-    const userMsgRecordRes = await ApiService.pipe(
+      return true // Not rate limited, continue processing
+    })
+
+    const recordUserMessageEffect = ApiService.pipe(
       Effect.flatMap(({ effectApi }) =>
         effectApi.discord.recordUserMessage({
           userId: userId,
-          guildId: guildId,
+          // biome-ignore lint/style/noNonNullAssertion: can't be null
+          guildId: guildId!,
           intimacyIncrement: 1,
         })
-      )
-    ).pipe(
+      ),
       Effect.tap((resp) =>
         Effect.logInfo(
           `Recording message - User: ${username}(${userId}) from Guild: ${guildId}`
@@ -149,141 +159,139 @@ const handleTetoInteraction = async (
         if (error.statusCode === 402) return 'not enough credit' as const
         return 'fail to record user message' as const
       }),
-      Effect.either,
-      Effect.provide(live),
-      Runtime.runPromise(runtime)
+      Effect.either
     )
 
-    const config = Effect.runSync(appConfig)
-    if (
-      isProduction &&
-      Either.isLeft(userMsgRecordRes) &&
-      userMsgRecordRes.left === 'not enough credit'
-    ) {
-      await reply(
-        `You've run out of message credits! Vote for the bot to get more credits.\n${config.voteUrl}`
-      )
-      return
-    }
-
-    // Check for prompt injection attempts
-    if (containsInjection(content)) {
-      Effect.logWarning(
-        `Prompt injection detected from user ${username}(${userId}) in guild ${guildId}: "${content}"`
-      ).pipe(Runtime.runSync(runtime))
-
-      const teasingResponse = await createLLMResponse(
-        buildPromptInjectionMessage(),
-        null,
-        0, // Use intimacy level 0 for injection attempts
-        username,
-        channelId
-      )
-        .pipe(Effect.provide(live), Runtime.runPromise(runtime))
-        .catch(() => {
-          // Fallback to static message if LLM fails
-          return {
-            content: buildPromptInjectionFallbackMessage(),
-          }
-        })
-
-      await reply(String(teasingResponse.content))
-      return
-    }
-
-    // Get user intimacy for LLM context
-    const intimacy =
-      userMsgRecordRes._tag === 'Right'
-        ? userMsgRecordRes.right.data.userGuild?.intimacy || 0
-        : 0
-
-    // Generate LLM response
-    const response = await createLLMResponse(
-      content,
-      imageAttachment || null,
-      intimacy,
-      username,
-      channelId
-    ).pipe(Effect.provide(live), Runtime.runPromise(runtime))
-
-    await reply(String(response.content))
-  } catch (error) {
-    Effect.logError(`Error in Teto interaction: ${error}`).pipe(
-      Runtime.runSync(runtime)
-    )
-
-    try {
-      await reply(
-        'Sorry, I encountered an error while processing your message. Please try again later.'
-      )
-    } catch (replyError) {
-      Effect.logError(`Failed to send error reply: ${replyError}`).pipe(
-        Runtime.runSync(runtime)
-      )
-    }
-  }
-}
-
-/**
- * Handle messages - only respond to @mentions in guild channels
- */
-export const messageCreateListener =
-  (runtime: Runtime.Runtime<never>, live: typeof MainLive) =>
-  async (message: Message): Promise<void> => {
-    // Ignore messages from bots (including ourselves)
-    if (message.author.bot) return
-
-    // Only handle guild messages (ignore DMs)
-    if (!message.guildId) {
-      return
-    }
-
-    // Check if the bot is mentioned
-    if (!message.mentions.has(message.client.user)) {
-      return // Not mentioned, ignore
-    }
-
-    // Check if bot has permission to send messages in this channel
-    if (!canBotSendMessages(message)) {
-      return
-    }
-
-    // Extract image attachments if any
-    const imageAttachment =
-      message.attachments.size > 0
-        ? Array.from(message.attachments.values()).find((att) =>
-            att.contentType?.startsWith('image/')
+    const handleNotEnoughCreditEffect = (
+      userMsgRecordRes: Either.Either<
+        RecordUserMessageResponse,
+        'not enough credit' | 'fail to record user message'
+      >
+    ) =>
+      Effect.gen(function* () {
+        const config = yield* appConfig
+        if (
+          isProduction &&
+          Either.isLeft(userMsgRecordRes) &&
+          userMsgRecordRes.left === 'not enough credit'
+        ) {
+          const discordService = yield* DiscordService
+          yield* discordService.reply(
+            message,
+            `You've run out of message credits! Vote for the bot to get more credits.\n${config.voteUrl}`
           )
-        : null
-
-    // Remove the bot mention from the content to get the actual message
-    const botMention = `<@${message.client.user.id}>`
-    const botNicknameMention = `<@!${message.client.user.id}>`
-    const content = message.content
-      .replace(botMention, '')
-      .replace(botNicknameMention, '')
-      .trim()
-
-    // If there's no content after removing the mention, just skip
-    if (!content && !imageAttachment) {
-      return
-    }
-
-    try {
-      await handleTetoInteraction(runtime, live, {
-        content,
-        imageAttachment: imageAttachment || null,
-        userId: message.author.id,
-        username: message.author.username,
-        channelId: message.channelId,
-        guildId: message.guildId,
-        reply: async (content: string) => {
-          await message.reply(content)
-        },
+          return true // Indicate we should return early
+        }
+        return false
       })
-    } catch (error) {
-      Effect.logError(`Error handling @mention: ${error}`).pipe(
-        Runtime.runSync(runtime)
+
+    const handlePromptInjectionEffect = (content: string) =>
+      Effect.gen(function* () {
+        if (containsInjection(content)) {
+          yield* Effect.logWarning(
+            `Prompt injection detected from user ${username}(${userId}) in guild ${guildId}: "${content}"`
+          )
+
+          const teasingResponse = yield* createLLMResponse(
+            message,
+            buildPromptInjectionMessage(),
+            0 // Use intimacy level 0 for injection attempts
+          ).pipe(
+            Effect.catchAll(() =>
+              Effect.succeed({
+                content: buildPromptInjectionFallbackMessage(),
+              })
+            )
+          )
+
+          const discordService = yield* DiscordService
+          yield* discordService.reply(message, String(teasingResponse.content))
+          return true // Indicate we should return early
+        }
+        return false
+      })
+
+    const handleNormalResponseEffect = (
+      content: string,
+      userMsgRecordRes: Either.Either<
+        RecordUserMessageResponse,
+        'not enough credit' | 'fail to record user message'
+      >
+    ) =>
+      Effect.gen(function* () {
+        // Get user intimacy for LLM context
+        const intimacy =
+          userMsgRecordRes._tag === 'Right'
+            ? userMsgRecordRes.right.data?.userGuild?.intimacy || 0
+            : 0
+
+        // Generate LLM response
+        const response = yield* createLLMResponse(message, content, intimacy)
+
+        const discordService = yield* DiscordService
+        yield* discordService.reply(message, String(response.content))
+      })
+
+    // Entry
+    const mainEffect = Effect.gen(function* () {
+      const content = yield* removeBotMentionEffect
+      const channelService = yield* ChannelService
+
+      const isWhitelisted = yield* checkChannelWhitelistEffect
+
+      /**
+       * Auto whitelist if user has manage channels permission and channel is not yet whitelisted
+       */
+      if (!isWhitelisted && hasManageChannelsPermissionFromMessage(message)) {
+        // biome-ignore lint/style/noNonNullAssertion: can't be null
+        yield* channelService.whitelistChannel(channelId, userId, guildId!)
+        yield* Effect.logInfo(`Auto whitelist channel ${channelId}`)
+      } else if (
+        !isWhitelisted &&
+        !hasManageChannelsPermissionFromMessage(message)
+      ) {
+        const discordService = yield* DiscordService
+        yield* discordService.reply(message, buildSetupMessage())
+        return
+      }
+      // the other two cases should just proceed
+
+      const passedRateLimit = yield* checkRateLimitEffect
+      if (!passedRateLimit) return
+
+      const userMsgRecordRes = yield* recordUserMessageEffect
+
+      const notEnoughCredit =
+        yield* handleNotEnoughCreditEffect(userMsgRecordRes)
+      if (notEnoughCredit) return
+
+      const hasInjection = yield* handlePromptInjectionEffect(content)
+      if (hasInjection) return
+
+      yield* handleNormalResponseEffect(content, userMsgRecordRes)
+    }).pipe(
+      Effect.catchAll((error) =>
+        Effect.gen(function* () {
+          yield* Effect.logError(`Error in messageCreate mainEffect: ${error}`)
+
+          const discordService = yield* DiscordService
+          yield* discordService
+            .reply(
+              message,
+              'Sorry, I encountered an error while processing your message. Please try again later.'
+            )
+            .pipe(
+              Effect.catchAll((replyError) =>
+                Effect.logError(`Failed to send error reply: ${replyError}`)
+              )
+            )
+        })
       )
-    }
+    )
+
+    // Check if bot should respond to this message
+    // includes all filtering logic
+    if (!canBotSendMessages(message)) return
+
+    await mainEffect.pipe(Effect.provide(live), Runtime.runPromise(runtime))
   }
