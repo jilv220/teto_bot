@@ -22,7 +22,6 @@ async function executeStatusCommand(
   guildId: string,
   channelId: string
 ) {
-  await interaction.deferReply()
   try {
     // Check if channel is whitelisted
     const isChannelWhitelisted = await ChannelService.pipe(
@@ -87,13 +86,15 @@ async function executeStatusCommand(
       interaction.guild?.name
     )
 
-    await interaction.editReply({
+    await interaction.reply({
       embeds: [embed],
+      flags: MessageFlags.Ephemeral,
     })
   } catch (error) {
     console.error('Error in status command:', error)
-    await interaction.editReply({
+    await interaction.reply({
       content: 'An error occurred while retrieving your status.',
+      flags: MessageFlags.Ephemeral,
     })
   }
 }
