@@ -24,15 +24,7 @@ export const ClientLive = Layer.effect(
     const config = yield* appConfig
 
     const client = new Client<true>({
-      intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        // TODO: remove after bot in 100+ guilds
-        GatewayIntentBits.MessageContent,
-        GatewayIntentBits.DirectMessages,
-        GatewayIntentBits.DirectMessageTyping,
-      ],
-      partials: [Partials.Channel, Partials.Message],
+      intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
     })
 
     yield* Effect.tryPromise(() => client.login(config.botToken))

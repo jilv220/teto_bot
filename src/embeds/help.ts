@@ -28,6 +28,12 @@ export function buildHelpEmbed(commands: CommandInfo[]): EmbedBuilder {
     )
     .addFields(
       {
+        name: '**Chat with Teto:**',
+        value:
+          'Simply @mention me in any whitelisted channel! For example:\n`@TetoBot Hello! How are you today?`',
+        inline: false,
+      },
+      {
         name: '**Commands:**',
         value: commandList,
         inline: false,

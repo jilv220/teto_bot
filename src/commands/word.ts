@@ -23,21 +23,27 @@ export async function execute(
   live: typeof MainLive,
   interaction: ChatInputCommandInteraction
 ) {
+  // Only allow in guild channels
+  if (!interaction.guildId) {
+    await interaction.reply({
+      content: 'This command can only be used in a server.',
+      flags: MessageFlags.Ephemeral,
+    })
+    return
+  }
+
   const guildId = interaction.guildId
   const channelId = interaction.channelId
   const username = interaction.user.username
-  const isDM = !guildId
 
-  // Check channel access (allows DMs, requires whitelist for guild channels)
-  const isChannelAllowed = await Effect.gen(function* () {
-    const channelService = yield* ChannelService
-    return yield* channelService.checkChannelAccess(
-      channelId,
-      () => isDM // Predicate: allow if it's a DM
+  // Check if channel is whitelisted
+  const isChannelWhitelisted = await ChannelService.pipe(
+    Effect.flatMap(({ isChannelWhitelisted }) =>
+      isChannelWhitelisted(channelId)
     )
-  }).pipe(Effect.provide(live), Runtime.runPromise(runtime))
+  ).pipe(Effect.provide(live), Runtime.runPromise(runtime))
 
-  if (!isChannelAllowed) {
+  if (!isChannelWhitelisted) {
     await interaction.reply({
       content: 'This command can only be used in whitelisted channels.',
       flags: MessageFlags.Ephemeral,
