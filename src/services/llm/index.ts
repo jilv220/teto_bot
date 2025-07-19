@@ -12,6 +12,7 @@ import {
   START,
   StateGraph,
 } from '@langchain/langgraph'
+import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres'
 import { ToolNode } from '@langchain/langgraph/prebuilt'
 import { Context, Effect, Layer } from 'effect'
 import { v4 as uuidv4 } from 'uuid'
@@ -243,9 +244,11 @@ export const LLMLive = Layer.effect(
       .addEdge('summarize_conversation', END)
       .addEdge('delete_messages', 'router')
 
-    // Add memory
-    const memory = new MemorySaver()
-    const llm = workflow.compile({ checkpointer: memory })
+    // Add memory with Postgres
+    const checkpointer = PostgresSaver.fromConnString(config.databaseUrl)
+    yield* Effect.promise(() => checkpointer.setup())
+
+    const llm = workflow.compile({ checkpointer })
 
     return llm
   })

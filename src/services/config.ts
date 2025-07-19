@@ -12,6 +12,7 @@ export const appConfig = Effect.gen(function* () {
     botApiKey: yield* Config.string('BOT_API_KEY'),
     botToken: yield* Config.string('BOT_TOKEN'),
     clientId: yield* Config.string('CLIENT_ID'),
+    databaseUrl: yield* Config.string('DATABASE_URL'),
     topggToken: yield* Config.string('TOPGG_TOKEN'),
     apiBaseUrl: yield* Config.string('API_BASE_URL').pipe(
       Config.withDefault('http://localhost:3000')
