@@ -114,7 +114,6 @@ export const messageCreateListener =
 
       if (!isChannelWhitelisted) {
         yield* Effect.log(`Channel ${channelId} is not yet whitelisted`)
-        // TODO: auto whitelist channel
         return false // Not whitelisted, should stop processing
       }
 

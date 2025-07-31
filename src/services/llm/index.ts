@@ -3,6 +3,7 @@ import {
   RemoveMessage,
   SystemMessage,
 } from '@langchain/core/messages'
+import type { RunnableConfig } from '@langchain/core/runnables'
 import {
   Annotation,
   END,
@@ -72,6 +73,10 @@ export const LLMLive = Layer.effect(
     const conversationModel = yield* LLMConversationModelContext
     const summarizationModel = yield* LLMSummarizationModelContext
     const visionModel = yield* LLMVisionModelContext
+
+    // Add memory with Postgres
+    const checkpointer = PostgresSaver.fromConnString(config.databaseUrl)
+    yield* Effect.promise(() => checkpointer.setup())
 
     // Shared conversation logic
     const createConversation =
@@ -154,10 +159,38 @@ export const LLMLive = Layer.effect(
     }
 
     // Delete old messages but preserve current user message
-    const deleteMessages = (state: typeof GraphAnnotation.State) => {
-      // Create remove messages for all but the current one
+    const deleteMessages = async (
+      state: typeof GraphAnnotation.State,
+      config?: RunnableConfig
+    ) => {
+      const threadId = config?.configurable?.thread_id
+
+      if (threadId) {
+        try {
+          // biome-ignore lint/suspicious/noExplicitAny: Access private
+          const pool = (checkpointer as any).pool
+
+          // Stupid hack
+          if (pool) {
+            await pool.query('DELETE FROM checkpoints WHERE thread_id = $1', [
+              threadId,
+            ])
+            await pool.query(
+              'DELETE FROM checkpoint_writes WHERE thread_id = $1',
+              [threadId]
+            )
+            await pool.query(
+              'DELETE FROM checkpoint_blobs WHERE thread_id = $1',
+              [threadId]
+            )
+          }
+        } catch (error) {
+          console.error('Error cleaning up checkpoints:', error)
+        }
+      }
+
       const messagesToDelete = state.messages
-        .slice(0, -1) // All except the last one
+        .slice(0, -1)
         .filter((m) => m.id)
         .map((m) => new RemoveMessage({ id: m.id as string }))
 
@@ -176,7 +209,7 @@ export const LLMLive = Layer.effect(
       const { lastMessageTimestamp } = state
 
       // If gap is larger than configured threshold (e.g., 30 minutes), treat as new topic
-      const gapThresholdMs = config.conversationGapThreshold
+      const gapThresholdMs = config.conversationGapThresholdMs
       const gap = currentTime - lastMessageTimestamp
 
       if (gap > gapThresholdMs) {
@@ -243,10 +276,6 @@ export const LLMLive = Layer.effect(
       .addConditionalEdges('tools', routeAfterTools)
       .addEdge('summarize_conversation', END)
       .addEdge('delete_messages', 'router')
-
-    // Add memory with Postgres
-    const checkpointer = PostgresSaver.fromConnString(config.databaseUrl)
-    yield* Effect.promise(() => checkpointer.setup())
 
     const llm = workflow.compile({ checkpointer })
 

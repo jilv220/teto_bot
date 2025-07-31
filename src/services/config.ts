@@ -30,7 +30,7 @@ export const appConfig = Effect.gen(function* () {
     summarizationThreshold: 16,
     // Minimum is 1, which is the most recent user message
     recentMessagesKeep: 1,
-    conversationGapThreshold: 1000 * 60 * 60 * 2,
+    conversationGapThresholdMs: 1000 * 60 * 1 * 1,
     maxRequests: 8,
     windowMs: 1000 * 60,
     cleanupIntervalMs: 1000 * 60 * 5,
